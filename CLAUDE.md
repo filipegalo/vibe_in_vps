@@ -251,6 +251,22 @@ This project explicitly does NOT support:
 
 **Status**: ✅ Core implementation complete and ready for testing
 
+---
+
+## Documentation Standards
+
+### Approved Documentation Files
+
+**ONLY these markdown files should exist in the project:**
+
+1. **README.md** - High-level overview and quick start guide
+2. **CLAUDE.md** - Architecture decisions and project context (this file)
+3. **docs/SETUP.md** - Complete step-by-step setup guide with troubleshooting
+4. **docs/RUNBOOK.md** - Operations and maintenance reference
+5. **docs/CONTRIBUTING.md** - Development workflow and contribution guidelines
+
+**Important**: Any other `.md` files should be deleted or consolidated into the above files to maintain clean documentation structure.
+
 
 <claude-mem-context>
 # Recent Activity
