@@ -49,6 +49,8 @@ You should now see the repository at:
 https://github.com/YOUR_USERNAME/vibe_in_vps
 ```
 
+**Note**: You may see a failed "Deploy to VPS" workflow run - this is expected! The deployment workflow requires initial setup to be completed first. Just continue with the setup steps below.
+
 ✅ **Checkpoint**: You have your own copy of the repository.
 
 ---

@@ -51,6 +51,8 @@ A deployment template that automates the entire infrastructure and deployment pi
 
 The setup guide walks you through every step with screenshots and troubleshooting.
 
+**Note**: After forking, the deploy workflow may run and fail - this is expected! It needs the initial setup to be completed first. Just follow the setup guide and it will work on subsequent pushes.
+
 ---
 
 ## How It Works

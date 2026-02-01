@@ -59,10 +59,29 @@ jobs:
     name: Deploy to VPS
     needs: build
     runs-on: ubuntu-latest
+    # Only run if setup has been completed (secrets exist)
+    if: vars.SETUP_COMPLETE == 'true' || secrets.VPS_HOST != ''
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Verify Setup Complete
+        run: |
+          if [ -z "${{ secrets.VPS_HOST }}" ]; then
+            echo "❌ ERROR: VPS not configured!"
+            echo ""
+            echo "This workflow requires initial setup to be completed first."
+            echo ""
+            echo "Please follow these steps:"
+            echo "1. Go to Actions → Initial VPS Setup"
+            echo "2. Run the setup workflow"
+            echo "3. Wait for it to complete successfully"
+            echo ""
+            echo "After setup completes, this workflow will run automatically on future pushes."
+            exit 1
+          fi
+          echo "✓ Setup verified - VPS_HOST configured"
 
       - name: Create GitHub Deployment
         id: deployment
