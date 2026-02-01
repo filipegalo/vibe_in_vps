@@ -64,6 +64,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create GitHub Deployment
+        id: deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: production
+          environment-url: http://${{ secrets.VPS_HOST }}
+          ref: ${{ github.sha }}
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -99,6 +108,23 @@ jobs:
             docker compose ps
             docker compose logs --tail=50 app
           EOF
+
+      - name: Update deployment status (success)
+        if: success()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          state: success
+          environment-url: http://${{ secrets.VPS_HOST }}
+
+      - name: Update deployment status (failure)
+        if: failure()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          state: failure
 
       - name: Cleanup SSH key
         if: always()
