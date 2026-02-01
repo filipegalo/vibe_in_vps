@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    container_name: app
+    restart: unless-stopped
+    ports:
+      - "80:3000"
+    environment:
+      - NODE_ENV=production
+      # Add your app-specific environment variables here
+      # - DATABASE_URL=${DATABASE_URL}
+    # Uncomment to add persistent storage
+    # volumes:
+    #   - app-data:/app/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  app-network:
+    driver: bridge
+
+# Uncomment to enable persistent storage
+# volumes:
+#   app-data:

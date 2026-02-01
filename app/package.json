@@ -1,0 +1,19 @@
+{
+  "name": "vibe-example-app",
+  "version": "1.0.0",
+  "description": "Example application for vibe_in_vps deployment template",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "vibe",
+    "deployment",
+    "example"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

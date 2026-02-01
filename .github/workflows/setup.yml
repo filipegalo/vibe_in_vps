@@ -1,0 +1,83 @@
+name: Initial VPS Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    name: Bootstrap VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Wait for VPS to be ready
+        run: |
+          echo "Waiting for VPS to accept SSH connections..."
+          for i in {1..30}; do
+            if ssh -i ~/.ssh/deploy_key -o ConnectTimeout=5 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'"; then
+              echo "VPS is ready!"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10 seconds..."
+            sleep 10
+          done
+          echo "ERROR: Could not connect to VPS after 30 attempts"
+          exit 1
+
+      - name: Copy deployment files to VPS
+        run: |
+          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/bootstrap.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/update.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
+
+      - name: Run bootstrap script
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            export GITHUB_REPOSITORY=${{ github.repository }}
+            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            export GITHUB_ACTOR=${{ github.actor }}
+
+            cd /opt/app
+            chmod +x bootstrap.sh
+            ./bootstrap.sh
+          EOF
+
+      - name: Verify setup
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            echo "=== System Info ==="
+            docker --version
+            docker compose version
+            echo ""
+            echo "=== Running Containers ==="
+            docker compose ps
+            echo ""
+            echo "=== Recent Logs ==="
+            docker compose logs --tail=20 app
+          EOF
+
+      - name: Ping healthcheck
+        if: success()
+        run: |
+          curl -fsS --retry 3 "${{ secrets.HEALTHCHECK_PING_URL }}" > /dev/null || true
+
+      - name: Display access information
+        run: |
+          echo "=== Setup Complete ==="
+          echo "Your app should be accessible at: http://${{ secrets.VPS_HOST }}"
+          echo ""
+          echo "To view logs: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'docker compose logs -f'"
+          echo "To check status: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'docker compose ps'"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

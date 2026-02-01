@@ -1,0 +1,20 @@
+# Copy this file to terraform.tfvars and fill in your values
+# NEVER commit terraform.tfvars to git!
+
+# Required: Get from https://console.hetzner.cloud/
+hcloud_token = "your-hetzner-api-token-here"
+
+# Required: Get from https://healthchecks.io/
+healthchecks_api_key = "your-healthchecks-api-key-here"
+
+# Required: Your SSH public key (from ~/.ssh/id_ed25519.pub or similar)
+# Example: ssh-ed25519 AAAA... your-email@example.com
+ssh_public_key = "ssh-ed25519 AAAA... your-email@example.com"
+
+# Required: Your GitHub repository (format: owner/repo)
+github_repository = "yourusername/vibe_in_vps"
+
+# Optional: Customize these if needed
+# server_name = "my-app-server"
+# server_type = "cx22"        # ~$4.50/mo
+# location    = "nbg1"        # Nuremberg, Germany

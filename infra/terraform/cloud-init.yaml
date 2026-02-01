@@ -1,0 +1,73 @@
+#cloud-config
+#
+# This script runs once when the VPS is first created.
+# It installs Docker, Docker Compose, and sets up the environment.
+#
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - git
+  - ufw
+  - fail2ban
+
+# Create deploy user for CI/CD SSH access
+users:
+  - name: deploy
+    groups: sudo, docker
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://get.docker.com -o get-docker.sh
+  - sh get-docker.sh
+  - rm get-docker.sh
+
+  # Add deploy user to docker group (already done in users section, but ensure)
+  - usermod -aG docker deploy
+
+  # Install Docker Compose v2
+  - mkdir -p /usr/local/lib/docker/cli-plugins
+  - curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+  - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+  # Create deployment directory
+  - mkdir -p /opt/app
+  - chown deploy:deploy /opt/app
+
+  # Configure firewall
+  - ufw --force enable
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp   # SSH
+  - ufw allow 80/tcp   # HTTP
+  - ufw allow 443/tcp  # HTTPS (for future use)
+
+  # Start and enable Docker
+  - systemctl start docker
+  - systemctl enable docker
+
+  # Configure fail2ban for SSH protection
+  - systemctl start fail2ban
+  - systemctl enable fail2ban
+
+# Write completion marker
+write_files:
+  - path: /opt/app/.cloud-init-complete
+    content: |
+      Cloud-init completed successfully at $(date)
+    owner: deploy:deploy
+    permissions: '0644'
+
+final_message: |
+  Cloud-init setup complete!
+  Docker version: $(docker --version)
+  Docker Compose version: $(docker compose version)
+
+  The server is ready for deployment.
+  SSH in as user 'deploy' to access the system.
