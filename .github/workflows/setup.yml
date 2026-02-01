@@ -206,9 +206,15 @@ jobs:
           EOF
 
       - name: Ping healthcheck
-        if: success() && needs.terraform.outputs.healthcheck_ping_url != ''
+        if: success()
+        env:
+          HEALTHCHECK_URL: ${{ needs.terraform.outputs.healthcheck_ping_url }}
         run: |
-          curl -fsS --retry 3 "${{ needs.terraform.outputs.healthcheck_ping_url }}" > /dev/null || echo "healthchecks.io disabled"
+          if [ -n "$HEALTHCHECK_URL" ]; then
+            curl -fsS --retry 3 "$HEALTHCHECK_URL" > /dev/null && echo "✓ healthchecks.io pinged"
+          else
+            echo "ℹ healthchecks.io monitoring disabled (no HEALTHCHECK_PING_URL configured)"
+          fi
 
       - name: Display access information
         run: |
