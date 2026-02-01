@@ -1,19 +1,19 @@
 # vibe_in_vps
 
-> Zero-ops deployment template: Fork, push, deployed. ✨
+> Zero-ops deployment template: Fork, add secrets, click run. ✨
 
-Deploy your Dockerized app to a cheap VPS with **zero manual server setup**. Just fork this repo, add your Dockerfile, push to GitHub, and your app auto-deploys to a Hetzner VPS.
+Deploy your Dockerized app to a cheap VPS with **zero manual setup**. No Terraform CLI, no SSH, no server configuration. Just fork this repo, add GitHub secrets, click "Run workflow", and your app is live.
 
 ## What is this?
 
 This is a deployment template that handles the entire DevOps pipeline for you:
 
-- **Infrastructure**: Terraform provisions a Hetzner VPS (~$5/month)
+- **Infrastructure**: Terraform (runs in GitHub Actions) provisions a Hetzner VPS (~$5/month)
 - **CI/CD**: GitHub Actions builds and deploys on every push
 - **Monitoring**: healthchecks.io alerts you if your app goes down
 - **Runtime**: Docker + Docker Compose (no Kubernetes complexity)
 
-**Target Time**: Fresh fork to deployed app in under 10 minutes.
+**Target Time**: Fresh fork to deployed app in **under 5 minutes**.
 
 ## Who is this for?
 
@@ -27,11 +27,15 @@ This is a deployment template that handles the entire DevOps pipeline for you:
 - [ ] GitHub account (free)
 - [ ] Hetzner Cloud account ([sign up](https://console.hetzner.cloud/), free tier available)
 - [ ] healthchecks.io account ([sign up](https://healthchecks.io/), free tier: 20 checks)
-- [ ] A Dockerfile for your application
-- [ ] Terraform installed locally ([download](https://www.terraform.io/downloads))
 - [ ] SSH key pair (or generate one: `ssh-keygen -t ed25519`)
 
-## Quick Start (10 minutes)
+**You do NOT need:**
+- ❌ Terraform installed locally
+- ❌ SSH access to configure servers
+- ❌ Docker installed locally
+- ❌ Any DevOps experience
+
+## Quick Start (5 minutes)
 
 ### Step 1: Fork this repository
 
@@ -52,78 +56,71 @@ Click the "Fork" button at the top of this page.
 3. Go to **Settings** → **API Access**
 4. Copy your API key
 
-### Step 3: Configure Terraform
+### Step 3: Generate SSH keys (if you don't have them)
 
 ```bash
-cd infra/terraform
-cp terraform.tfvars.example terraform.tfvars
+ssh-keygen -t ed25519 -C "your-email@example.com"
 ```
 
-Edit `terraform.tfvars` and fill in your values:
+Press Enter for all prompts (no passphrase needed for automation).
 
-```hcl
-hcloud_token         = "your-hetzner-api-token"
-healthchecks_api_key = "your-healthchecks-api-key"
-ssh_public_key       = "ssh-ed25519 AAAA... your-email@example.com"
-github_repository    = "yourusername/vibe_in_vps"
-```
-
-### Step 4: Provision the VPS
-
+**View your keys:**
 ```bash
-terraform init
-terraform plan   # Review what will be created
-terraform apply  # Type 'yes' to confirm
+# Public key (for GitHub secret SSH_PUBLIC_KEY)
+cat ~/.ssh/id_ed25519.pub
+
+# Private key (for GitHub secret SSH_PRIVATE_KEY)
+cat ~/.ssh/id_ed25519
 ```
 
-Terraform will output important values. **Save these!**
+### Step 4: Add GitHub Secrets
+
+Go to your forked repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+
+Add these **5 secrets**:
+
+| Secret Name | Value | How to get it |
+|-------------|-------|---------------|
+| `HETZNER_TOKEN` | Your Hetzner API token | From Step 2 |
+| `HEALTHCHECKS_API_KEY` | Your healthchecks.io API key | From Step 2 |
+| `SSH_PUBLIC_KEY` | Your SSH **public** key | `cat ~/.ssh/id_ed25519.pub` |
+| `SSH_PRIVATE_KEY` | Your SSH **private** key (entire file) | `cat ~/.ssh/id_ed25519` |
+| `VPS_USER` | `deploy` | Just type: `deploy` |
+
+### Step 5: Run the setup workflow
+
+1. Go to **Actions** tab in your repo
+2. Click **"Initial VPS Setup"** in the left sidebar
+3. Click **"Run workflow"** button (top right)
+4. Click the green **"Run workflow"** button
+
+**What happens next:**
+- ✅ Terraform provisions a Hetzner VPS (~2 minutes)
+- ✅ Cloud-init installs Docker (~3 minutes)
+- ✅ Bootstrap script deploys your app (~1 minute)
+- ✅ GitHub secrets are automatically configured
+- ✅ healthchecks.io monitoring is activated
+
+**Total time: ~6 minutes**
+
+### Step 6: Access your app
+
+When the workflow completes, check the **Summary** tab for your app URL:
 
 ```
-server_ip = "1.2.3.4"
-ssh_command = "ssh deploy@1.2.3.4"
-healthcheck_ping_url = "https://hc-ping.com/..."
+http://YOUR_VPS_IP
 ```
 
-### Step 5: Add GitHub Secrets
-
-Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
-
-Add these secrets:
-
-| Secret Name | Value |
-|-------------|-------|
-| `VPS_HOST` | The `server_ip` from Terraform output |
-| `VPS_SSH_KEY` | Your **private** SSH key (from `~/.ssh/id_ed25519`) |
-| `VPS_USER` | `deploy` |
-| `HEALTHCHECK_PING_URL` | The `healthcheck_ping_url` from Terraform output |
-
-### Step 6: Run initial setup
-
-Go to **Actions** → **Initial VPS Setup** → **Run workflow**
-
-This runs once to bootstrap the VPS.
-
-### Step 7: Deploy your app
-
-Push to the `main` branch:
-
-```bash
-git add .
-git commit -m "Initial deployment"
-git push origin main
+You should see:
+```json
+{
+  "message": "Hello from vibe_in_vps!",
+  "timestamp": "2024-01-15T12:34:56.789Z",
+  "environment": "production"
+}
 ```
 
-GitHub Actions will:
-1. Build your Docker image
-2. Push to GitHub Container Registry
-3. Deploy to your VPS
-4. Ping healthchecks.io
-
-### Step 8: Access your app
-
-Visit `http://<your-server-ip>` in your browser.
-
-You should see: `{"message":"Hello from vibe_in_vps!"}`
+**That's it!** Your app is live.
 
 ## How deployments work
 
@@ -205,24 +202,15 @@ app.get('/health', (req, res) => {
 
 ### Adding app-specific environment variables
 
-Edit `deploy/.env.example` and add your variables:
+SSH to the VPS and edit `/opt/app/.env`:
 
 ```bash
-GITHUB_REPOSITORY=yourusername/vibe_in_vps
-DATABASE_URL=postgres://...
-API_KEY=your-api-key
-```
-
-SSH to the VPS and create `/opt/app/.env`:
-
-```bash
-ssh deploy@<your-server-ip>
+ssh deploy@YOUR_VPS_IP
 cd /opt/app
 nano .env  # Add your variables
 ```
 
-Restart the app:
-
+Then restart:
 ```bash
 docker compose restart app
 ```
@@ -245,53 +233,58 @@ volumes:
 
 ## How to destroy everything
 
-### WARNING: This deletes your VPS and all data!
+### Option 1: Via GitHub Actions (Recommended)
 
-```bash
-cd infra/terraform
-terraform destroy
-```
+1. Go to **Actions** → **Initial VPS Setup**
+2. Click **Run workflow**
+3. Check the **"Destroy infrastructure"** checkbox
+4. Click **Run workflow**
 
-Then manually delete:
-1. Docker images from [GitHub Packages](https://github.com/settings/packages)
-2. healthchecks.io check from [dashboard](https://healthchecks.io/projects/)
+This will:
+- Destroy the Hetzner VPS
+- Delete the healthchecks.io check
+- Clean up all resources
+
+### Option 2: Manual cleanup
+
+Manually delete:
+1. VPS from [Hetzner Console](https://console.hetzner.cloud/)
+2. Docker images from [GitHub Packages](https://github.com/settings/packages)
+3. healthchecks.io check from [dashboard](https://healthchecks.io/projects/)
 
 ## Common pitfalls
+
+### "Terraform state not found" when destroying
+
+**Problem**: Terraform state is stored as a GitHub Actions artifact
+
+**Solution**: Download the state first:
+1. Go to **Actions** → find your setup workflow run
+2. Download "terraform-state" artifact
+3. Extract to `infra/terraform/terraform.tfstate`
+4. Run destroy workflow
 
 ### "Permission denied (publickey)"
 
 **Problem**: SSH key not configured correctly
 
-**Solution**: Make sure you added the **private** key to GitHub Secrets, not the public key.
+**Solution**: Make sure you added the **entire private key** to `SSH_PRIVATE_KEY` secret:
 
 ```bash
-# This is your PRIVATE key (add to GitHub Secrets)
+# Copy this ENTIRE output (including BEGIN/END lines)
 cat ~/.ssh/id_ed25519
-
-# This is your PUBLIC key (add to terraform.tfvars)
-cat ~/.ssh/id_ed25519.pub
 ```
 
 ### "Port 80 already in use"
 
 **Problem**: Another service is using port 80
 
-**Solution**: SSH to the VPS and check what's running:
+**Solution**: SSH to the VPS and check:
 
 ```bash
-ssh deploy@<your-server-ip>
+ssh deploy@YOUR_VPS_IP
 sudo lsof -i :80
 docker compose ps
-```
-
-### "Docker build fails in GitHub Actions"
-
-**Problem**: Dockerfile has errors
-
-**Solution**: Test locally first:
-
-```bash
-./scripts/test-local.sh
 ```
 
 ### "healthchecks.io shows 'DOWN'"
@@ -301,7 +294,7 @@ docker compose ps
 **Solution**: Check if the app is running:
 
 ```bash
-ssh deploy@<your-server-ip>
+ssh deploy@YOUR_VPS_IP
 docker compose ps
 docker compose logs app
 ```
@@ -328,18 +321,39 @@ Make sure your app has a `/health` endpoint.
 ### Check app status
 
 ```bash
-ssh deploy@<your-server-ip> 'docker compose ps'
+ssh deploy@YOUR_VPS_IP 'docker compose ps'
 ```
 
 ### View logs
 
 ```bash
-ssh deploy@<your-server-ip> 'docker compose logs -f app'
+ssh deploy@YOUR_VPS_IP 'docker compose logs -f app'
 ```
 
 ### healthchecks.io dashboard
 
 Visit [healthchecks.io/projects/](https://healthchecks.io/projects/) to see uptime status and configure alerts (email, Slack, etc.)
+
+## Advanced: Terraform state management
+
+**Important**: Terraform state is stored as a GitHub Actions artifact (90-day retention).
+
+### Download state
+
+1. Go to **Actions** → find your setup workflow run
+2. Download "terraform-state" artifact
+3. Extract `terraform.tfstate` to `infra/terraform/`
+
+### Best practices for production
+
+For production deployments, use a remote backend:
+
+- **Terraform Cloud** (free tier available)
+- **AWS S3 + DynamoDB** (with state locking)
+- **Azure Blob Storage**
+- **Google Cloud Storage**
+
+See `infra/terraform/backend.tf.example` for configuration examples.
 
 ## Roadmap / TODOs
 

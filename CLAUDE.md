@@ -87,10 +87,11 @@ This project explicitly does NOT support:
 - **Accepted because**: Target users already use GitHub
 - **Alternative**: Could support Docker Hub, but adds complexity
 
-### 4. Manual Terraform Apply
-- **Trade-off**: User must run Terraform locally once
-- **Accepted because**: Infrastructure changes are rare
-- **Why not automate**: Managing Terraform state in CI is complex
+### 4. Terraform in CI/CD (Not Local)
+- **Decision**: Terraform runs in GitHub Actions, not locally
+- **Benefit**: Users don't need Terraform CLI installed
+- **Trade-off**: State stored as GitHub Actions artifact (90-day retention)
+- **Mitigation**: Document how to download state for destroy operations
 
 ### 5. SSH-Based Deployment
 - **Trade-off**: Requires SSH key in GitHub Secrets
@@ -154,10 +155,15 @@ This project explicitly does NOT support:
 - `server_type` - Hetzner server type (default: "cx22")
 - `location` - Datacenter location (default: "nbg1")
 
-### Required for GitHub Secrets
+### Required for GitHub Secrets (Initial Setup)
+- `HETZNER_TOKEN` - Hetzner Cloud API token
+- `HEALTHCHECKS_API_KEY` - healthchecks.io API key
+- `SSH_PUBLIC_KEY` - SSH public key for server access
+- `SSH_PRIVATE_KEY` - SSH private key for deployment
+- `VPS_USER` - SSH username (set to "deploy")
+
+### Auto-Generated GitHub Secrets (by setup.yml workflow)
 - `VPS_HOST` - Server IP address (from Terraform output)
-- `VPS_SSH_KEY` - Private SSH key
-- `VPS_USER` - SSH username (default: "deploy")
 - `HEALTHCHECK_PING_URL` - healthchecks.io ping URL (from Terraform output)
 
 ### Runtime (VPS `.env` file)
@@ -219,6 +225,10 @@ This project explicitly does NOT support:
 - **Rationale**: Adds complexity; can be added via setup wizard later
 - **Decided**: Use docker logs, no log aggregation
 - **Rationale**: Sufficient for single-server deployments
+- **Decided**: Run Terraform in GitHub Actions, not locally
+- **Rationale**: True "zero-ops" - users don't need Terraform CLI
+- **Implementation**: setup.yml workflow handles terraform apply/destroy
+- **State Management**: Stored as GitHub Actions artifact with 90-day retention
 
 ---
 

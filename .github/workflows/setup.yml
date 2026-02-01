@@ -2,46 +2,172 @@ name: Initial VPS Setup
 
 on:
   workflow_dispatch:
+    inputs:
+      destroy:
+        description: 'Destroy infrastructure instead of creating it'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
-  setup:
+  terraform:
+    name: Provision Infrastructure
+    runs-on: ubuntu-latest
+    outputs:
+      vps_host: ${{ steps.tf_output.outputs.vps_host }}
+      healthcheck_ping_url: ${{ steps.tf_output.outputs.healthcheck_ping_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+          terraform_wrapper: false
+
+      - name: Create terraform.tfvars from secrets
+        working-directory: infra/terraform
+        run: |
+          cat > terraform.tfvars <<EOF
+          hcloud_token         = "${{ secrets.HETZNER_TOKEN }}"
+          healthchecks_api_key = "${{ secrets.HEALTHCHECKS_API_KEY }}"
+          ssh_public_key       = "${{ secrets.SSH_PUBLIC_KEY }}"
+          github_repository    = "${{ github.repository }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: infra/terraform
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: ${{ !inputs.destroy }}
+        working-directory: infra/terraform
+        run: terraform plan
+
+      - name: Terraform Apply
+        if: ${{ !inputs.destroy }}
+        working-directory: infra/terraform
+        run: terraform apply -auto-approve
+
+      - name: Terraform Destroy
+        if: ${{ inputs.destroy }}
+        working-directory: infra/terraform
+        run: terraform destroy -auto-approve
+
+      - name: Extract Terraform Outputs
+        if: ${{ !inputs.destroy }}
+        id: tf_output
+        working-directory: infra/terraform
+        run: |
+          VPS_HOST=$(terraform output -raw server_ip)
+          HEALTHCHECK_URL=$(terraform output -raw healthcheck_ping_url)
+
+          echo "vps_host=$VPS_HOST" >> $GITHUB_OUTPUT
+          echo "healthcheck_ping_url=$HEALTHCHECK_URL" >> $GITHUB_OUTPUT
+
+          echo "### Terraform Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**VPS IP Address:** \`$VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**SSH Command:** \`ssh deploy@$VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**App URL:** http://$VPS_HOST" >> $GITHUB_STEP_SUMMARY
+
+      - name: Save Terraform State
+        if: ${{ !inputs.destroy }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state
+          path: infra/terraform/terraform.tfstate
+          retention-days: 90
+
+      - name: Set GitHub Secrets via API
+        if: ${{ !inputs.destroy }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VPS_HOST: ${{ steps.tf_output.outputs.vps_host }}
+          HEALTHCHECK_URL: ${{ steps.tf_output.outputs.healthcheck_ping_url }}
+        run: |
+          # Set VPS_HOST secret
+          gh secret set VPS_HOST --body "$VPS_HOST"
+
+          # Set HEALTHCHECK_PING_URL secret
+          gh secret set HEALTHCHECK_PING_URL --body "$HEALTHCHECK_URL"
+
+          echo "✅ GitHub secrets automatically configured!"
+
+  bootstrap:
     name: Bootstrap VPS
+    needs: terraform
+    if: ${{ !inputs.destroy }}
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-
       - name: Wait for VPS to be ready
         run: |
           echo "Waiting for VPS to accept SSH connections..."
-          for i in {1..30}; do
-            if ssh -i ~/.ssh/deploy_key -o ConnectTimeout=5 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'"; then
-              echo "VPS is ready!"
+          VPS_HOST="${{ needs.terraform.outputs.vps_host }}"
+
+          for i in {1..60}; do
+            if nc -z -w5 $VPS_HOST 22; then
+              echo "✅ VPS is accepting SSH connections!"
+              sleep 30  # Give cloud-init more time to complete
               exit 0
             fi
-            echo "Attempt $i failed, retrying in 10 seconds..."
+            echo "Attempt $i/60 - waiting for SSH on $VPS_HOST..."
             sleep 10
           done
-          echo "ERROR: Could not connect to VPS after 30 attempts"
+
+          echo "❌ Could not connect to VPS after 10 minutes"
           exit 1
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ needs.terraform.outputs.vps_host }} >> ~/.ssh/known_hosts
+
+      - name: Wait for cloud-init to complete
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@${{ needs.terraform.outputs.vps_host }} << 'EOF'
+            echo "Waiting for cloud-init to complete..."
+
+            MAX_WAIT=600
+            ELAPSED=0
+            while [ ! -f /opt/app/.cloud-init-complete ]; do
+              if [ $ELAPSED -ge $MAX_WAIT ]; then
+                echo "ERROR: cloud-init did not complete within ${MAX_WAIT}s"
+                exit 1
+              fi
+              echo "  Still waiting... (${ELAPSED}s)"
+              sleep 10
+              ELAPSED=$((ELAPSED + 10))
+            done
+
+            echo "✅ cloud-init complete!"
+            docker --version
+            docker compose version
+          EOF
 
       - name: Copy deployment files to VPS
         run: |
-          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
-          scp -i ~/.ssh/deploy_key deploy/bootstrap.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
-          scp -i ~/.ssh/deploy_key deploy/update.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml deploy@${{ needs.terraform.outputs.vps_host }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/bootstrap.sh deploy@${{ needs.terraform.outputs.vps_host }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/update.sh deploy@${{ needs.terraform.outputs.vps_host }}:/opt/app/
 
       - name: Run bootstrap script
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh -i ~/.ssh/deploy_key deploy@${{ needs.terraform.outputs.vps_host }} << 'EOF'
             export GITHUB_REPOSITORY=${{ github.repository }}
             export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
             export GITHUB_ACTOR=${{ github.actor }}
@@ -53,7 +179,7 @@ jobs:
 
       - name: Verify setup
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh -i ~/.ssh/deploy_key deploy@${{ needs.terraform.outputs.vps_host }} << 'EOF'
             echo "=== System Info ==="
             docker --version
             docker compose version
@@ -62,21 +188,34 @@ jobs:
             docker compose ps
             echo ""
             echo "=== Recent Logs ==="
-            docker compose logs --tail=20 app
+            docker compose logs --tail=30 app
           EOF
 
       - name: Ping healthcheck
         if: success()
         run: |
-          curl -fsS --retry 3 "${{ secrets.HEALTHCHECK_PING_URL }}" > /dev/null || true
+          curl -fsS --retry 3 "${{ needs.terraform.outputs.healthcheck_ping_url }}" > /dev/null || true
 
       - name: Display access information
         run: |
-          echo "=== Setup Complete ==="
-          echo "Your app should be accessible at: http://${{ secrets.VPS_HOST }}"
-          echo ""
-          echo "To view logs: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'docker compose logs -f'"
-          echo "To check status: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'docker compose ps'"
+          echo "### 🎉 Setup Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Your app is now deployed and running!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Access your app:** http://${{ needs.terraform.outputs.vps_host }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**SSH access:** \`ssh deploy@${{ needs.terraform.outputs.vps_host }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**View logs:** \`ssh deploy@${{ needs.terraform.outputs.vps_host }} 'docker compose logs -f'\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Monitor uptime:** [healthchecks.io](https://healthchecks.io/projects/)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Push changes to \`main\` branch to trigger automatic deployments" >> $GITHUB_STEP_SUMMARY
+          echo "2. Replace the example app in \`/app\` with your own application" >> $GITHUB_STEP_SUMMARY
+          echo "3. Configure alert channels in healthchecks.io dashboard" >> $GITHUB_STEP_SUMMARY
 
       - name: Cleanup SSH key
         if: always()
