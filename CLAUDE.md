@@ -154,6 +154,10 @@ This project explicitly does NOT support:
 - `server_name` - VPS name (default: "vibe-vps")
 - `server_type` - Hetzner server type (default: "cx22")
 - `location` - Datacenter location (default: "nbg1")
+- `project_name` - Project identifier for labels (default: "vibe-in-vps")
+- `allowed_ssh_ips` - IP addresses allowed to SSH (default: ["0.0.0.0/0", "::/0"])
+- `allowed_http_ips` - IP addresses allowed HTTP access (default: ["0.0.0.0/0", "::/0"])
+- `allowed_https_ips` - IP addresses allowed HTTPS access (default: ["0.0.0.0/0", "::/0"])
 
 ### Required for GitHub Secrets (Initial Setup)
 - `HETZNER_TOKEN` - Hetzner Cloud API token
@@ -235,6 +239,10 @@ This project explicitly does NOT support:
 - **Rationale**: Reduces required accounts from 3 to 2 (GitHub + Hetzner)
 - **Implementation**: Conditional resource creation in Terraform, workflows skip ping if disabled
 - **Trade-off**: No automated uptime monitoring unless user opts in
+- **Decided**: Make firewall rules customizable via variables
+- **Rationale**: Allow users to restrict SSH to their IP, customize access control
+- **Implementation**: Variables for allowed IPs per port (SSH, HTTP, HTTPS)
+- **Default**: Open to all (0.0.0.0/0) for simplicity, users can lock down as needed
 
 ---
 

@@ -38,3 +38,27 @@ variable "github_repository" {
   description = "GitHub repository in format: owner/repo"
   type        = string
 }
+
+variable "project_name" {
+  description = "Project name used for labels and identification"
+  type        = string
+  default     = "vibe-in-vps"
+}
+
+variable "allowed_ssh_ips" {
+  description = "List of IP addresses/CIDR blocks allowed to SSH (port 22). Use ['0.0.0.0/0', '::/0'] for all IPs."
+  type        = list(string)
+  default     = ["0.0.0.0/0", "::/0"]
+}
+
+variable "allowed_http_ips" {
+  description = "List of IP addresses/CIDR blocks allowed to access HTTP (port 80). Use ['0.0.0.0/0', '::/0'] for all IPs."
+  type        = list(string)
+  default     = ["0.0.0.0/0", "::/0"]
+}
+
+variable "allowed_https_ips" {
+  description = "List of IP addresses/CIDR blocks allowed to access HTTPS (port 443). Use ['0.0.0.0/0', '::/0'] for all IPs."
+  type        = list(string)
+  default     = ["0.0.0.0/0", "::/0"]
+}

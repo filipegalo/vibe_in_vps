@@ -18,3 +18,10 @@ github_repository = "yourusername/vibe_in_vps"
 # server_name = "my-app-server"
 # server_type = "cx22"        # ~$4.50/mo
 # location    = "nbg1"        # Nuremberg, Germany
+# project_name = "my-project"
+
+# Optional: Restrict access by IP (default: open to all)
+# Get your IP: curl ifconfig.me
+# allowed_ssh_ips   = ["1.2.3.4/32"]           # Restrict SSH to your IP only
+# allowed_http_ips  = ["0.0.0.0/0", "::/0"]    # Keep HTTP open to all
+# allowed_https_ips = ["0.0.0.0/0", "::/0"]    # Keep HTTPS open to all

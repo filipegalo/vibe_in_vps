@@ -27,7 +27,7 @@ resource "hcloud_server" "vps" {
 
   labels = {
     managed-by = "terraform"
-    project    = "vibe-in-vps"
+    project    = var.project_name
   }
 
   # Prevent accidental deletion
@@ -40,37 +40,28 @@ resource "hcloud_server" "vps" {
 resource "hcloud_firewall" "web" {
   name = "${var.server_name}-firewall"
 
-  # SSH access
+  # SSH access - customizable source IPs
   rule {
-    direction = "in"
-    protocol  = "tcp"
-    port      = "22"
-    source_ips = [
-      "0.0.0.0/0",
-      "::/0"
-    ]
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "22"
+    source_ips = var.allowed_ssh_ips
   }
 
-  # HTTP access
+  # HTTP access - customizable source IPs
   rule {
-    direction = "in"
-    protocol  = "tcp"
-    port      = "80"
-    source_ips = [
-      "0.0.0.0/0",
-      "::/0"
-    ]
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "80"
+    source_ips = var.allowed_http_ips
   }
 
-  # HTTPS access (for future use)
+  # HTTPS access - customizable source IPs (for future use)
   rule {
-    direction = "in"
-    protocol  = "tcp"
-    port      = "443"
-    source_ips = [
-      "0.0.0.0/0",
-      "::/0"
-    ]
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "443"
+    source_ips = var.allowed_https_ips
   }
 }
 
@@ -81,7 +72,7 @@ resource "healthchecksio_check" "app" {
   name = var.server_name
 
   tags = [
-    "vibe-in-vps",
+    var.project_name,
     "production"
   ]
 
