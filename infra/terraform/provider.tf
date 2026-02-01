@@ -18,5 +18,5 @@ provider "hcloud" {
 }
 
 provider "healthchecksio" {
-  api_key = var.healthchecks_api_key
+  api_key = var.healthchecks_api_key != "" ? var.healthchecks_api_key : "dummy"
 }

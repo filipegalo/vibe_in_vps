@@ -98,9 +98,9 @@ jobs:
           EOF
 
       - name: Ping healthcheck
-        if: success()
+        if: success() && secrets.HEALTHCHECK_PING_URL != ''
         run: |
-          curl -fsS --retry 3 "${{ secrets.HEALTHCHECK_PING_URL }}" > /dev/null || true
+          curl -fsS --retry 3 "${{ secrets.HEALTHCHECK_PING_URL }}" > /dev/null || echo "healthchecks.io disabled"
 
       - name: Verify deployment
         run: |

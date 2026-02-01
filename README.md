@@ -26,8 +26,10 @@ This is a deployment template that handles the entire DevOps pipeline for you:
 
 - [ ] GitHub account (free)
 - [ ] Hetzner Cloud account ([sign up](https://console.hetzner.cloud/), free tier available)
-- [ ] healthchecks.io account ([sign up](https://healthchecks.io/), free tier: 20 checks)
 - [ ] SSH key pair (or generate one: `ssh-keygen -t ed25519`)
+
+**Optional (for monitoring)**:
+- [ ] healthchecks.io account ([sign up](https://healthchecks.io/), free tier: 20 checks)
 
 **You do NOT need:**
 - ❌ Terraform installed locally
@@ -50,11 +52,12 @@ Click the "Fork" button at the top of this page.
 4. Give it "Read & Write" permissions
 5. Copy the token
 
-**healthchecks.io API Key:**
+**healthchecks.io API Key (Optional):**
 1. Go to [healthchecks.io](https://healthchecks.io/)
 2. Sign up for free account
 3. Go to **Settings** → **API Access**
 4. Copy your API key
+5. **Or skip** to disable monitoring (leave empty in secrets)
 
 ### Step 3: Generate SSH keys (if you don't have them)
 
@@ -77,15 +80,15 @@ cat ~/.ssh/id_ed25519
 
 Go to your forked repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
-Add these **5 secrets**:
+Add these **4-5 secrets**:
 
-| Secret Name | Value | How to get it |
-|-------------|-------|---------------|
-| `HETZNER_TOKEN` | Your Hetzner API token | From Step 2 |
-| `HEALTHCHECKS_API_KEY` | Your healthchecks.io API key | From Step 2 |
-| `SSH_PUBLIC_KEY` | Your SSH **public** key | `cat ~/.ssh/id_ed25519.pub` |
-| `SSH_PRIVATE_KEY` | Your SSH **private** key (entire file) | `cat ~/.ssh/id_ed25519` |
-| `VPS_USER` | `deploy` | Just type: `deploy` |
+| Secret Name | Value | Required | How to get it |
+|-------------|-------|----------|---------------|
+| `HETZNER_TOKEN` | Your Hetzner API token | Yes | From Step 2 |
+| `SSH_PUBLIC_KEY` | Your SSH **public** key | Yes | `cat ~/.ssh/id_ed25519.pub` |
+| `SSH_PRIVATE_KEY` | Your SSH **private** key (entire file) | Yes | `cat ~/.ssh/id_ed25519` |
+| `VPS_USER` | `deploy` | Yes | Just type: `deploy` |
+| `HEALTHCHECKS_API_KEY` | Your healthchecks.io API key | **Optional** | From Step 2 (or leave empty) |
 
 ### Step 5: Run the setup workflow
 
@@ -99,7 +102,7 @@ Add these **5 secrets**:
 - ✅ Cloud-init installs Docker (~3 minutes)
 - ✅ Bootstrap script deploys your app (~1 minute)
 - ✅ GitHub secrets are automatically configured
-- ✅ healthchecks.io monitoring is activated
+- ✅ healthchecks.io monitoring activated (if enabled)
 
 **Total time: ~6 minutes**
 
@@ -308,7 +311,7 @@ Make sure your app has a `/health` endpoint.
 | Hetzner CX22 VPS | ~$5.50/mo | 2 vCPU, 4GB RAM, 40GB SSD |
 | GitHub Actions | Free | 2,000 minutes/month (public repos) |
 | GitHub Container Registry | Free | Public repos |
-| healthchecks.io | Free | Up to 20 checks |
+| healthchecks.io | Free (optional) | Up to 20 checks |
 | **Total** | **~$5.50/mo** | |
 
 ### Cheaper options

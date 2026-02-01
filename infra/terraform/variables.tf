@@ -5,9 +5,10 @@ variable "hcloud_token" {
 }
 
 variable "healthchecks_api_key" {
-  description = "healthchecks.io API key"
+  description = "healthchecks.io API key (optional - leave empty to disable monitoring)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "ssh_public_key" {

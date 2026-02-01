@@ -74,8 +74,10 @@ resource "hcloud_firewall" "web" {
   }
 }
 
-# Health check resource
+# Health check resource (optional)
 resource "healthchecksio_check" "app" {
+  count = var.healthchecks_api_key != "" ? 1 : 0
+
   name = var.server_name
 
   tags = [

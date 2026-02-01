@@ -500,7 +500,7 @@ Now that your app is deployed:
 
 ## Getting Help
 
-- **GitHub Issues**: [Open an issue](https://github.com/yourusername/vibe_in_vps/issues)
+- **GitHub Issues**: [Open an issue](https://github.com/filipegalo/vibe_in_vps/issues)
 - **Hetzner Docs**: [docs.hetzner.com](https://docs.hetzner.com/)
 - **Terraform Docs**: [terraform.io/docs](https://www.terraform.io/docs)
 

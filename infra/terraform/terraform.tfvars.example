@@ -4,8 +4,8 @@
 # Required: Get from https://console.hetzner.cloud/
 hcloud_token = "your-hetzner-api-token-here"
 
-# Required: Get from https://healthchecks.io/
-healthchecks_api_key = "your-healthchecks-api-key-here"
+# Optional: Get from https://healthchecks.io/ (leave empty to disable monitoring)
+healthchecks_api_key = ""
 
 # Required: Your SSH public key (from ~/.ssh/id_ed25519.pub or similar)
 # Example: ssh-ed25519 AAAA... your-email@example.com

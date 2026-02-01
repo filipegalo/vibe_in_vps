@@ -47,7 +47,7 @@ Hetzner VPS (Terraform-provisioned)
 | IaC Tool | Terraform | Industry standard, Hetzner provider available |
 | CI/CD | GitHub Actions | Already where code lives, free for public repos |
 | Deployment Method | SSH + docker compose | Simple, no agents needed, easy to debug |
-| Monitoring | healthchecks.io | Free tier, Terraform provider available |
+| Monitoring | healthchecks.io (optional) | Free tier, Terraform provider available, optional to reduce complexity |
 | Logging | docker logs | Built-in, zero config |
 | SSL/Domain | None (for now) | See TODOs - Cloudflare integration planned |
 
@@ -148,7 +148,7 @@ This project explicitly does NOT support:
 ### Required for Terraform (`terraform.tfvars`)
 - `hcloud_token` - Hetzner Cloud API token
 - `ssh_public_key` - SSH public key for server access
-- `healthchecks_api_key` - healthchecks.io API key
+- `healthchecks_api_key` - healthchecks.io API key (optional - leave empty to disable monitoring)
 
 ### Optional for Terraform
 - `server_name` - VPS name (default: "vibe-vps")
@@ -157,10 +157,12 @@ This project explicitly does NOT support:
 
 ### Required for GitHub Secrets (Initial Setup)
 - `HETZNER_TOKEN` - Hetzner Cloud API token
-- `HEALTHCHECKS_API_KEY` - healthchecks.io API key
 - `SSH_PUBLIC_KEY` - SSH public key for server access
 - `SSH_PRIVATE_KEY` - SSH private key for deployment
 - `VPS_USER` - SSH username (set to "deploy")
+
+### Optional GitHub Secrets
+- `HEALTHCHECKS_API_KEY` - healthchecks.io API key (leave empty to disable monitoring)
 
 ### Auto-Generated GitHub Secrets (by setup.yml workflow)
 - `VPS_HOST` - Server IP address (from Terraform output)
@@ -229,6 +231,10 @@ This project explicitly does NOT support:
 - **Rationale**: True "zero-ops" - users don't need Terraform CLI
 - **Implementation**: setup.yml workflow handles terraform apply/destroy
 - **State Management**: Stored as GitHub Actions artifact with 90-day retention
+- **Decided**: Make healthchecks.io monitoring optional
+- **Rationale**: Reduces required accounts from 3 to 2 (GitHub + Hetzner)
+- **Implementation**: Conditional resource creation in Terraform, workflows skip ping if disabled
+- **Trade-off**: No automated uptime monitoring unless user opts in
 
 ---
 

@@ -97,10 +97,14 @@ jobs:
           # Set VPS_HOST secret
           gh secret set VPS_HOST --body "$VPS_HOST"
 
-          # Set HEALTHCHECK_PING_URL secret
-          gh secret set HEALTHCHECK_PING_URL --body "$HEALTHCHECK_URL"
-
-          echo "✅ GitHub secrets automatically configured!"
+          # Set HEALTHCHECK_PING_URL secret (if healthchecks enabled)
+          if [ -n "$HEALTHCHECK_URL" ]; then
+            gh secret set HEALTHCHECK_PING_URL --body "$HEALTHCHECK_URL"
+            echo "✅ GitHub secrets configured with healthchecks.io monitoring"
+          else
+            gh secret set HEALTHCHECK_PING_URL --body ""
+            echo "✅ GitHub secrets configured (healthchecks.io monitoring disabled)"
+          fi
 
   bootstrap:
     name: Bootstrap VPS
@@ -192,9 +196,9 @@ jobs:
           EOF
 
       - name: Ping healthcheck
-        if: success()
+        if: success() && needs.terraform.outputs.healthcheck_ping_url != ''
         run: |
-          curl -fsS --retry 3 "${{ needs.terraform.outputs.healthcheck_ping_url }}" > /dev/null || true
+          curl -fsS --retry 3 "${{ needs.terraform.outputs.healthcheck_ping_url }}" > /dev/null || echo "healthchecks.io disabled"
 
       - name: Display access information
         run: |

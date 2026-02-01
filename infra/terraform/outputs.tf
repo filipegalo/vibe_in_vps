@@ -19,8 +19,8 @@ output "ssh_command" {
 }
 
 output "healthcheck_ping_url" {
-  description = "healthchecks.io ping URL (add to GitHub Secrets)"
-  value       = healthchecksio_check.app.ping_url
+  description = "healthchecks.io ping URL (add to GitHub Secrets) - empty if healthchecks disabled"
+  value       = length(healthchecksio_check.app) > 0 ? healthchecksio_check.app[0].ping_url : ""
   sensitive   = true
 }
 
@@ -38,7 +38,7 @@ output "github_secrets_summary" {
   VPS_HOST: ${hcloud_server.vps.ipv4_address}
   VPS_SSH_KEY: <your-private-ssh-key>
   VPS_USER: deploy
-  HEALTHCHECK_PING_URL: ${healthchecksio_check.app.ping_url}
+  ${length(healthchecksio_check.app) > 0 ? "HEALTHCHECK_PING_URL: ${healthchecksio_check.app[0].ping_url}" : "HEALTHCHECK_PING_URL: (healthchecks.io disabled)"}
 
   Then push to main branch to trigger deployment.
   EOT
