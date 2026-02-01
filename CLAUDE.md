@@ -234,7 +234,12 @@ This project explicitly does NOT support:
 - **Decided**: Run Terraform in GitHub Actions, not locally
 - **Rationale**: True "zero-ops" - users don't need Terraform CLI
 - **Implementation**: setup.yml workflow handles terraform apply/destroy
-- **State Management**: Stored as GitHub Actions artifact with 90-day retention
+- **State Management**:
+  - State stored as GitHub Actions artifact (90-day retention)
+  - Automatically restored from previous workflow run before each execution
+  - Saved after successful apply/destroy
+  - Uses `dawidd6/action-download-artifact@v3` to fetch from previous run
+  - No remote backend needed for single-user deployments
 - **Decided**: Make healthchecks.io monitoring optional
 - **Rationale**: Reduces required accounts from 3 to 2 (GitHub + Hetzner)
 - **Implementation**: Conditional resource creation in Terraform, workflows skip ping if disabled

@@ -264,8 +264,20 @@ Key trade-offs made for simplicity:
 - **No zero-downtime deploys** → Brief (~10s) downtime during updates
 - **SSH-based deployment** → Simple to understand and debug
 - **Terraform in CI** → No local tools needed, state in GitHub artifacts
+- **Artifact-based state** → Automatically restored between workflow runs (90-day retention)
 
 See [CLAUDE.md](CLAUDE.md) for full rationale.
+
+## Terraform State Management
+
+State is automatically managed via GitHub Actions artifacts:
+
+- **Saved**: After every successful `terraform apply` or `terraform destroy`
+- **Restored**: Before every workflow run from the most recent artifact
+- **Retention**: 90 days (configurable in `.github/workflows/setup.yml`)
+- **Location**: Actions → Workflow run → Artifacts → `terraform-state`
+
+**No manual state management needed!** The workflow handles everything automatically.
 
 ---
 

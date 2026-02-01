@@ -27,6 +27,15 @@ jobs:
           terraform_version: "1.6.0"
           terraform_wrapper: false
 
+      - name: Restore Terraform State
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: setup.yml
+          name: terraform-state
+          path: infra/terraform/
+          if_no_artifact_found: warn
+
       - name: Create terraform.tfvars from secrets
         working-directory: infra/terraform
         run: |
@@ -80,12 +89,13 @@ jobs:
           echo "**App URL:** http://$VPS_HOST" >> $GITHUB_STEP_SUMMARY
 
       - name: Save Terraform State
-        if: ${{ !inputs.destroy }}
+        if: ${{ !inputs.destroy && success() }}
         uses: actions/upload-artifact@v4
         with:
           name: terraform-state
           path: infra/terraform/terraform.tfstate
           retention-days: 90
+          overwrite: true
 
       - name: Set GitHub Secrets via API
         if: ${{ !inputs.destroy }}
