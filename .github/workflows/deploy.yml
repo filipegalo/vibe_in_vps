@@ -59,6 +59,9 @@ jobs:
     name: Deploy to VPS
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
 
     steps:
       - name: Checkout repository
