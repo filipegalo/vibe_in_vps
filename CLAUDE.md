@@ -120,7 +120,6 @@ This project explicitly does NOT support:
 │
 ├── deploy/
 │   ├── docker-compose.yml     # Runtime services (app only)
-│   ├── bootstrap.sh           # Initial VPS setup script
 │   ├── update.sh              # Deployment script
 │   └── .env.example           # Environment variable template
 │
@@ -180,8 +179,8 @@ This project explicitly does NOT support:
 
 ## Common Issues & Solutions
 
-### Issue: Cloud-init still running when GitHub Actions SSH
-**Solution**: `bootstrap.sh` waits for Docker to be ready before proceeding
+### Issue: Cloud-init still running when deployment starts
+**Solution**: Setup workflow waits for cloud-init completion marker (`/opt/app/.cloud-init-complete`) before finishing
 
 ### Issue: SSH permission denied
 **Solution**: Check SSH key permissions (`chmod 600`) and correct user (deploy, not root)

@@ -108,7 +108,6 @@ vibe_in_vps/
 │
 ├── deploy/                 # Deployment configuration
 │   ├── docker-compose.yml # Container orchestration
-│   ├── bootstrap.sh       # Deployment script (legacy)
 │   └── update.sh          # Deployment script
 │
 └── .github/workflows/      # CI/CD pipelines
