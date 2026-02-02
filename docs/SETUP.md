@@ -323,7 +323,7 @@ Now the magic happens - GitHub Actions will provision your VPS and deploy the ap
 
 The workflow will start running. Click on the workflow run to see details.
 
-**What's happening** (6-8 minutes total):
+**What's happening** (4-5 minutes total):
 
 **Phase 1: Provision Infrastructure (2-3 minutes)**
 - ✅ Terraform initializes
@@ -332,26 +332,25 @@ The workflow will start running. Click on the workflow run to see details.
 - ✅ Saves Terraform state as artifact
 - ✅ Displays deployment secrets to configure
 
-**Phase 2: Bootstrap VPS (4-5 minutes)**
+**Phase 2: Verify VPS Setup (2-3 minutes)**
 - ✅ Waits for VPS to accept SSH connections
 - ✅ Waits for cloud-init to install Docker (~3 min)
-- ✅ Copies deployment files to VPS
-- ✅ Runs bootstrap script
-- ✅ Pulls Docker image and starts app
-- ✅ Verifies deployment
+- ✅ Verifies Docker installation
+
+**Note**: The app is NOT deployed yet - that happens when you push code in Step 6.
 
 ### 5.4 Check for Success
 
 When complete, you'll see:
 - ✅ Green checkmark on the workflow
-- ✅ "🎉 Setup Complete!" in the summary
+- ✅ "🎉 Infrastructure Provisioned!" in the summary
 
 Click on the **"Summary"** to see:
 - **VPS IP Address**
 - **SSH Command**
-- **App URL**
+- **What's installed** (Docker, firewall, etc.)
 
-✅ **Checkpoint**: Your VPS is provisioned and app is deployed!
+✅ **Checkpoint**: Your VPS is provisioned and ready for deployment!
 
 ### 5.5 Configure Deployment Secrets
 
@@ -377,13 +376,34 @@ The workflow summary will show you two secrets that need to be added for automat
 
 ---
 
-## Step 6: Verify Deployment
+## Step 6: Deploy Your Application
 
-### 6.1 Access Your Application
+Your VPS is ready! Now trigger the first deployment by pushing code.
 
-From the workflow Summary, copy the **App URL** (or VPS IP).
+### 6.1 Trigger First Deployment
 
-Open your browser and go to:
+The easiest way is to make a small change and push:
+
+```bash
+# Make a small change (or just trigger rebuild)
+git commit --allow-empty -m "trigger first deployment"
+git push origin main
+```
+
+This will trigger the **"Deploy to VPS"** workflow which will:
+1. Build your Docker image
+2. Push it to GitHub Container Registry
+3. Deploy it to your VPS
+
+### 6.2 Watch the Deployment
+
+1. Go to **Actions** tab in GitHub
+2. You'll see "Deploy to VPS" workflow running
+3. Click on it to watch progress (2-3 minutes)
+
+### 6.3 Access Your Application
+
+Once deployment completes, open your browser:
 ```
 http://YOUR_VPS_IP
 ```
@@ -392,12 +412,12 @@ http://YOUR_VPS_IP
 ```json
 {
   "message": "Hello from vibe_in_vps!",
-  "timestamp": "2026-02-01T23:45:00.000Z",
+  "timestamp": "2026-02-02T01:00:00.000Z",
   "environment": "production"
 }
 ```
 
-### 6.2 Check Health Endpoint
+### 6.4 Check Health Endpoint
 
 Visit:
 ```
@@ -408,19 +428,14 @@ http://YOUR_VPS_IP/health
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-02-01T23:45:00.000Z",
+  "timestamp": "2026-02-02T01:00:00.000Z",
   "uptime": 123.45
 }
 ```
 
-### 6.3 Verify in Hetzner Console
+✅ **Checkpoint**: Your app is deployed and running!
 
-1. Go to [console.hetzner.cloud](https://console.hetzner.cloud/)
-2. Click your project
-3. You should see a server named `vibe-vps` (or your custom name)
-4. Status: **Running** (green)
-
-### 6.4 Check Monitoring (If Enabled)
+### 6.5 Check Monitoring (If Enabled)
 
 If you enabled healthchecks.io:
 

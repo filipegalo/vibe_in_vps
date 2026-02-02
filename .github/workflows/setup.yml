@@ -125,16 +125,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "After adding these secrets, automatic deployments will work on push to main." >> $GITHUB_STEP_SUMMARY
 
-  bootstrap:
-    name: Bootstrap VPS
+  verify:
+    name: Verify VPS Setup
     needs: terraform
     if: ${{ !inputs.destroy }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Wait for VPS to be ready
         run: |
           echo "Waiting for VPS to accept SSH connections..."
@@ -182,72 +179,27 @@ jobs:
             docker compose version
           EOF
 
-      - name: Copy deployment files to VPS
+      - name: Display setup information
         run: |
-          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml deploy@${{ needs.terraform.outputs.vps_host }}:/opt/app/
-          scp -i ~/.ssh/deploy_key deploy/bootstrap.sh deploy@${{ needs.terraform.outputs.vps_host }}:/opt/app/
-          scp -i ~/.ssh/deploy_key deploy/update.sh deploy@${{ needs.terraform.outputs.vps_host }}:/opt/app/
-
-      - name: Run bootstrap script
-        run: |
-          ssh -i ~/.ssh/deploy_key deploy@${{ needs.terraform.outputs.vps_host }} << 'EOF'
-            export GITHUB_REPOSITORY=${{ github.repository }}
-            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            export GITHUB_ACTOR=${{ github.actor }}
-
-            cd /opt/app
-            chmod +x bootstrap.sh
-            ./bootstrap.sh
-          EOF
-
-      - name: Verify setup
-        run: |
-          ssh -i ~/.ssh/deploy_key deploy@${{ needs.terraform.outputs.vps_host }} << 'EOF'
-            echo "=== System Info ==="
-            docker --version
-            docker compose version
-            echo ""
-            echo "=== Deployment Directory ==="
-            ls -la /opt/app/
-            echo ""
-            echo "=== Running Containers ==="
-            cd /opt/app && docker compose ps
-            echo ""
-            echo "=== Recent Logs ==="
-            cd /opt/app && docker compose logs --tail=30 app
-          EOF
-
-      - name: Ping healthcheck
-        if: success()
-        env:
-          HEALTHCHECK_URL: ${{ needs.terraform.outputs.healthcheck_ping_url }}
-        run: |
-          if [ -n "$HEALTHCHECK_URL" ]; then
-            curl -fsS --retry 3 "$HEALTHCHECK_URL" > /dev/null && echo "✓ healthchecks.io pinged"
-          else
-            echo "ℹ healthchecks.io monitoring disabled (no HEALTHCHECK_PING_URL configured)"
-          fi
-
-      - name: Display access information
-        run: |
-          echo "### 🎉 Setup Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Infrastructure Provisioned!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Your app is now deployed and running!" >> $GITHUB_STEP_SUMMARY
+          echo "Your VPS is ready. Deploy your app by pushing code to trigger the deploy workflow." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Access your app:** http://${{ needs.terraform.outputs.vps_host }}" >> $GITHUB_STEP_SUMMARY
+          echo "**VPS IP:** \`${{ needs.terraform.outputs.vps_host }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**SSH access:** \`ssh deploy@${{ needs.terraform.outputs.vps_host }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**View logs:** \`ssh deploy@${{ needs.terraform.outputs.vps_host }} 'docker compose logs -f'\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Monitor uptime:** [healthchecks.io](https://healthchecks.io/projects/)" >> $GITHUB_STEP_SUMMARY
+          echo "**What's installed:**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Docker & Docker Compose" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Firewall configured (SSH, HTTP, HTTPS)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Deploy user with SSH access" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Push changes to \`main\` branch to trigger automatic deployments" >> $GITHUB_STEP_SUMMARY
-          echo "2. Replace the example app in \`/app\` with your own application" >> $GITHUB_STEP_SUMMARY
-          echo "3. Configure alert channels in healthchecks.io dashboard" >> $GITHUB_STEP_SUMMARY
+          echo "1. Add the \`VPS_HOST\` and \`HEALTHCHECK_PING_URL\` secrets (see above)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Push changes to \`main\` branch to trigger first deployment" >> $GITHUB_STEP_SUMMARY
+          echo "3. Your app will be available at: http://${{ needs.terraform.outputs.vps_host }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Cleanup SSH key
         if: always()
