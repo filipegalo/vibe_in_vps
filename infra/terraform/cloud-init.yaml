@@ -56,12 +56,11 @@ runcmd:
   - systemctl start fail2ban
   - systemctl enable fail2ban
 
-# Write completion marker
+# Write completion marker (created as root, ownership fixed in runcmd)
 write_files:
   - path: /opt/app/.cloud-init-complete
     content: |
-      Cloud-init completed successfully at $(date)
-    owner: deploy:deploy
+      Cloud-init completed successfully
     permissions: '0644'
 
 final_message: |
