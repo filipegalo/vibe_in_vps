@@ -207,11 +207,14 @@ jobs:
             docker --version
             docker compose version
             echo ""
+            echo "=== Deployment Directory ==="
+            ls -la /opt/app/
+            echo ""
             echo "=== Running Containers ==="
-            docker compose ps
+            cd /opt/app && docker compose ps
             echo ""
             echo "=== Recent Logs ==="
-            docker compose logs --tail=30 app
+            cd /opt/app && docker compose logs --tail=30 app
           EOF
 
       - name: Ping healthcheck
