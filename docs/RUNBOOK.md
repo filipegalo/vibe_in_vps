@@ -126,7 +126,7 @@ docker compose up -d app
 
 ### Destroy Everything
 
-1. Go to Actions → Initial VPS Setup
+1. Go to Actions → Provision Infrastructure
 2. Run workflow
 3. Check "Destroy infrastructure"
 4. Click Run workflow

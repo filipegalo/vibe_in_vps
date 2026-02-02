@@ -1,4 +1,4 @@
-name: Initial VPS Setup
+name: Provision Infrastructure
 
 on:
   workflow_dispatch:

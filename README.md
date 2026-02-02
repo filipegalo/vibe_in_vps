@@ -43,9 +43,10 @@ A deployment template that automates the entire infrastructure and deployment pi
 ### Setup Process
 
 1. **Fork this repository**
-2. **Add 4-5 GitHub secrets** (API tokens, SSH keys)
+2. **Add 5 GitHub secrets** (API tokens, SSH keys)
 3. **Run the setup workflow** in GitHub Actions
-4. **Access your deployed app** at the provided IP
+4. **Add 2 deployment secrets** from workflow output
+5. **Access your deployed app** at the provided IP
 
 👉 **[Complete Setup Guide →](docs/SETUP.md)**
 
@@ -132,7 +133,7 @@ vibe_in_vps/
 
 - **Terraform** provisions Hetzner VPS via GitHub Actions
 - **Cloud-init** installs Docker and sets up firewall automatically
-- **GitHub Secrets** auto-configured from Terraform outputs
+- **Deployment secrets** displayed in workflow summary for easy configuration
 - **State management** via GitHub Actions artifacts
 
 ### Continuous Deployment
@@ -222,7 +223,7 @@ See [docs/RUNBOOK.md#rollback-procedures](docs/RUNBOOK.md#rollback-procedures)
 
 ### Destroy Infrastructure
 
-1. Go to Actions → Initial VPS Setup
+1. Go to Actions → Provision Infrastructure
 2. Run workflow with "Destroy infrastructure" checked
 
 ---

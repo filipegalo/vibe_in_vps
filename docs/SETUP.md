@@ -296,7 +296,9 @@ You should see 5 secrets listed:
 - `SSH_PUBLIC_KEY`
 - `VPS_USER`
 
-✅ **Checkpoint**: All secrets configured!
+**Note**: After running the setup workflow in Step 5, you'll add 2 more secrets (`VPS_HOST` and `HEALTHCHECK_PING_URL`) for automatic deployments.
+
+✅ **Checkpoint**: Initial secrets configured!
 
 ---
 
@@ -309,9 +311,9 @@ Now the magic happens - GitHub Actions will provision your VPS and deploy the ap
 1. In your GitHub repository, click the **"Actions"** tab
 2. You'll see a list of workflows
 
-### 5.2 Run Initial VPS Setup
+### 5.2 Run Provision Infrastructure
 
-1. In the left sidebar, click **"Initial VPS Setup"**
+1. In the left sidebar, click **"Provision Infrastructure"**
 2. On the right side, click the **"Run workflow"** dropdown button
 3. Keep "Branch: main" selected
 4. Leave "Destroy infrastructure" **UNCHECKED**
@@ -328,7 +330,7 @@ The workflow will start running. Click on the workflow run to see details.
 - ✅ Terraform validates configuration
 - ✅ Terraform creates VPS on Hetzner
 - ✅ Saves Terraform state as artifact
-- ✅ Configures GitHub secrets automatically
+- ✅ Displays deployment secrets to configure
 
 **Phase 2: Bootstrap VPS (4-5 minutes)**
 - ✅ Waits for VPS to accept SSH connections
@@ -350,6 +352,28 @@ Click on the **"Summary"** to see:
 - **App URL**
 
 ✅ **Checkpoint**: Your VPS is provisioned and app is deployed!
+
+### 5.5 Configure Deployment Secrets
+
+The workflow summary will show you two secrets that need to be added for automatic deployments:
+
+1. **Go to Settings** → **Secrets and variables** → **Actions**
+
+2. **Add VPS_HOST secret:**
+   - Click **"New repository secret"**
+   - **Name**: `VPS_HOST`
+   - **Secret**: Copy the IP address from the workflow summary
+   - Click **"Add secret"**
+
+3. **Add HEALTHCHECK_PING_URL secret (if you configured healthchecks.io):**
+   - Click **"New repository secret"**
+   - **Name**: `HEALTHCHECK_PING_URL`
+   - **Secret**: Copy the ping URL from the workflow summary
+   - Click **"Add secret"**
+
+   **If you didn't configure healthchecks.io**: Skip this secret or leave it empty.
+
+✅ **Checkpoint**: Deployment secrets configured - automatic deployments will now work!
 
 ---
 
@@ -621,7 +645,7 @@ Set up billing alerts in Hetzner:
 2. Set monthly limit (e.g., $10)
 
 **Destroy infrastructure**:
-1. Go to Actions → Initial VPS Setup
+1. Go to Actions → Provision Infrastructure
 2. Run workflow
 3. Check "Destroy infrastructure"
 4. Click Run workflow

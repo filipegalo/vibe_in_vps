@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-echo "=== Bootstrap: Initial VPS Setup ==="
+echo "=== Bootstrap: Provision Infrastructure ==="
 
 # Wait for cloud-init to complete
 echo "Waiting for cloud-init to complete..."

@@ -72,7 +72,7 @@ jobs:
             echo "This workflow requires initial setup to be completed first."
             echo ""
             echo "Please follow these steps:"
-            echo "1. Go to Actions → Initial VPS Setup"
+            echo "1. Go to Actions → Provision Infrastructure"
             echo "2. Run the setup workflow"
             echo "3. Wait for it to complete successfully"
             echo ""
