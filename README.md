@@ -111,7 +111,7 @@ vibe_in_vps/
 │   └── update.sh          # Deployment script
 │
 └── .github/workflows/      # CI/CD pipelines
-    ├── setup.yml          # Provision infrastructure
+    ├── infrastructure.yml          # Provision infrastructure
     └── deploy.yml         # Deploy application
 ```
 
@@ -276,7 +276,7 @@ State is automatically managed via GitHub Actions artifacts:
 
 - **Saved**: After every successful `terraform apply` or `terraform destroy`
 - **Restored**: Before every workflow run from the most recent artifact
-- **Retention**: 90 days (configurable in `.github/workflows/setup.yml`)
+- **Retention**: 90 days (configurable in `.github/workflows/infrastructure.yml`)
 - **Location**: Actions → Workflow run → Artifacts → `terraform-state`
 
 **No manual state management needed!** The workflow handles everything automatically.

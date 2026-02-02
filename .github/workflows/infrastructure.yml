@@ -31,7 +31,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v3
         continue-on-error: true
         with:
-          workflow: setup.yml
+          workflow: infrastructure.yml
           name: terraform-state
           path: infra/terraform/
           if_no_artifact_found: warn

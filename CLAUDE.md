@@ -125,7 +125,7 @@ This project explicitly does NOT support:
 │
 ├── .github/workflows/
 │   ├── deploy.yml             # Main CI/CD pipeline
-│   └── setup.yml              # One-time bootstrap workflow
+│   └── infrastructure.yml              # One-time bootstrap workflow
 │
 ├── scripts/
 │   ├── test-local.sh          # Test Docker build locally
@@ -167,7 +167,7 @@ This project explicitly does NOT support:
 ### Optional GitHub Secrets
 - `HEALTHCHECKS_API_KEY` - healthchecks.io API key (leave empty to disable monitoring)
 
-### Auto-Generated GitHub Secrets (by setup.yml workflow)
+### Auto-Generated GitHub Secrets (by infrastructure.yml workflow)
 - `VPS_HOST` - Server IP address (from Terraform output)
 - `HEALTHCHECK_PING_URL` - healthchecks.io ping URL (from Terraform output)
 
@@ -232,7 +232,7 @@ This project explicitly does NOT support:
 - **Rationale**: Sufficient for single-server deployments
 - **Decided**: Run Terraform in GitHub Actions, not locally
 - **Rationale**: True "zero-ops" - users don't need Terraform CLI
-- **Implementation**: setup.yml workflow handles terraform apply/destroy
+- **Implementation**: infrastructure.yml workflow handles terraform apply/destroy
 - **State Management**:
   - State stored as GitHub Actions artifact (90-day retention)
   - Automatically restored from previous workflow run before each execution
