@@ -131,6 +131,7 @@ jobs:
       - name: Verify deployment
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd /opt/app
             docker compose ps
             docker compose logs --tail=50 app
           EOF
