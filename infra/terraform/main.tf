@@ -80,8 +80,8 @@ resource "healthchecksio_check" "app" {
   timeout = 300
   grace   = 60
 
-  # Alert channels (configured in healthchecks.io dashboard)
-  channels = "*"
+  # Alerts will be sent to all channels configured in healthchecks.io dashboard
+  # (channels attribute omitted = default behavior sends to all channels)
 
   # Optional: Add more specific configuration
   desc = "Health check for ${var.github_repository} deployed on ${var.server_name}"
