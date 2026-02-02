@@ -97,24 +97,33 @@ jobs:
           retention-days: 90
           overwrite: true
 
-      - name: Set GitHub Secrets via API
+      - name: Display secrets configuration instructions
         if: ${{ !inputs.destroy }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VPS_HOST: ${{ steps.tf_output.outputs.vps_host }}
           HEALTHCHECK_URL: ${{ steps.tf_output.outputs.healthcheck_ping_url }}
         run: |
-          # Set VPS_HOST secret
-          gh secret set VPS_HOST --body "$VPS_HOST"
+          echo "### ⚠️ Action Required: Configure Deployment Secrets" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Add these secrets to enable automatic deployments:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Go to: **Settings → Secrets and variables → Actions → New repository secret**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Required secret:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Name: \`VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Value: \`$VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Set HEALTHCHECK_PING_URL secret (if healthchecks enabled)
           if [ -n "$HEALTHCHECK_URL" ]; then
-            gh secret set HEALTHCHECK_PING_URL --body "$HEALTHCHECK_URL"
-            echo "✅ GitHub secrets configured with healthchecks.io monitoring"
-          else
-            gh secret set HEALTHCHECK_PING_URL --body ""
-            echo "✅ GitHub secrets configured (healthchecks.io monitoring disabled)"
+            echo "**Optional secret (for monitoring):**" >> $GITHUB_STEP_SUMMARY
+            echo "- Name: \`HEALTHCHECK_PING_URL\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Value: \`$HEALTHCHECK_URL\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
           fi
+
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "After adding these secrets, automatic deployments will work on push to main." >> $GITHUB_STEP_SUMMARY
 
   bootstrap:
     name: Bootstrap VPS
