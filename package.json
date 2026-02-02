@@ -1,0 +1,17 @@
+{
+  "name": "vibe_in_vps",
+  "version": "1.0.0",
+  "description": "Zero-ops deployment template for VPS",
+  "scripts": {
+    "setup-wizard": "node scripts/setup-wizard.js"
+  },
+  "keywords": [
+    "vps",
+    "deployment",
+    "terraform",
+    "docker",
+    "github-actions"
+  ],
+  "author": "",
+  "license": "MIT"
+}

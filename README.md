@@ -37,7 +37,21 @@ Deploy your Dockerized app to a cheap VPS in under 10 minutes. Add GitHub secret
 - SSH key pair (or generate one)
 - Optional: [healthchecks.io](https://healthchecks.io) account for monitoring
 
-### Steps
+### Setup Options
+
+**Option 1: Interactive Wizard** (Recommended)
+
+```bash
+npm run setup-wizard
+```
+
+Step-by-step guided setup with navigation and progress tracking.
+
+**Option 2: [Complete Setup Guide](docs/SETUP.md)**
+
+Traditional documentation with screenshots and detailed explanations.
+
+### Quick Steps
 
 1. **Fork** this repository
 2. **Add** 5 GitHub secrets (API tokens, SSH keys)
@@ -45,9 +59,7 @@ Deploy your Dockerized app to a cheap VPS in under 10 minutes. Add GitHub secret
 4. **Add** 2 deployment secrets from workflow output
 5. **Access** your deployed app at the provided IP
 
-**[View Complete Setup Guide](docs/SETUP.md)**
-
-> **Note**: After forking, the deploy workflow may run and fail - this is expected. Complete the setup guide first.
+> **Note**: After forking, the deploy workflow may run and fail - this is expected. Complete the setup first.
 
 <br />
 
