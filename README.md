@@ -87,9 +87,9 @@ The setup guide walks you through every step with screenshots and troubleshootin
 └─────────────────────────────────┘
 ```
 
-**First-time setup**: Terraform provisions the VPS, cloud-init installs Docker, bootstrap script deploys your app.
+**First-time setup**: Terraform provisions the VPS, cloud-init installs Docker. Push code to trigger first deployment.
 
-**Subsequent deploys**: Just `git push` → automatic deployment in 3-5 minutes.
+**Subsequent deploys**: Just `git push` → automatic deployment in 2-3 minutes.
 
 ---
 
@@ -108,7 +108,7 @@ vibe_in_vps/
 │
 ├── deploy/                 # Deployment configuration
 │   ├── docker-compose.yml # Container orchestration
-│   ├── bootstrap.sh       # Initial setup script
+│   ├── bootstrap.sh       # Deployment script (legacy)
 │   └── update.sh          # Deployment script
 │
 └── .github/workflows/      # CI/CD pipelines
