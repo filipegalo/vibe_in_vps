@@ -24,7 +24,7 @@ A deployment template that automates the entire infrastructure and deployment pi
 ✅ **No local tools** - Everything runs in GitHub Actions (no Terraform CLI, Docker, or SSH setup)
 ✅ **No manual server config** - Cloud-init handles all VPS setup automatically
 ✅ **No vendor lock-in** - Uses open standards (Docker, Terraform, GitHub Actions)
-✅ **Cost effective** - ~$5.50/month for VPS, everything else is free
+✅ **Cost effective** - ~$7.50/month for VPS, everything else is free
 ✅ **Production ready** - Health checks, monitoring, deployment tracking
 
 ---
@@ -181,13 +181,13 @@ app.get('/health', (req, res) => {
 
 | Service | Monthly Cost | Notes |
 |---------|--------------|-------|
-| **Hetzner CX22 VPS** | ~$5.50 | 2 vCPU, 4GB RAM, 40GB SSD |
+| **Hetzner CPX22 VPS** | ~$7.50 | 2 vCPU, 4GB RAM, 80GB SSD |
 | GitHub Actions | Free | 2,000 minutes/month (public repos) |
 | GitHub Container Registry | Free | Public repos |
 | healthchecks.io | Free (optional) | Up to 20 checks |
-| **Total** | **~$5.50** | |
+| **Total** | **~$7.50** | |
 
-**Cheaper option**: Hetzner CX11 ($3.79/month) - 1 vCPU, 2GB RAM - good for low-traffic apps.
+**Cheaper option**: Hetzner CPX11 (~$4.50/month) - 2 vCPU, 2GB RAM - good for low-traffic apps.
 
 ---
 

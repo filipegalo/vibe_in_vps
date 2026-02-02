@@ -41,7 +41,7 @@ Hetzner VPS (Terraform-provisioned)
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| VPS Provider | Hetzner | Cheapest reliable EU/US provider (~$4.50/mo for CX22) |
+| VPS Provider | Hetzner | Affordable reliable EU/US provider (~$7.50/mo for CPX22) |
 | Container Registry | GHCR | Free for public repos, integrated with GitHub |
 | Reverse Proxy | None (for now) | Keep it simple - direct port 80 access |
 | IaC Tool | Terraform | Industry standard, Hetzner provider available |
@@ -152,7 +152,7 @@ This project explicitly does NOT support:
 
 ### Optional for Terraform
 - `server_name` - VPS name (default: "vibe-vps")
-- `server_type` - Hetzner server type (default: "cx22")
+- `server_type` - Hetzner server type (default: "cpx22" - 2 vCPU, 4GB RAM)
 - `location` - Datacenter location (default: "nbg1")
 - `project_name` - Project identifier for labels (default: "vibe-in-vps")
 - `allowed_ssh_ips` - IP addresses allowed to SSH (default: ["0.0.0.0/0", "::/0"])

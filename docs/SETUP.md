@@ -649,7 +649,7 @@ After successful deployment:
 ## Cost Breakdown
 
 **Monthly costs**:
-- Hetzner CX22 VPS: ~$5.50/month
+- Hetzner CPX22 VPS: ~$7.50/month
 - GitHub Actions: Free (2,000 minutes/month for public repos)
 - healthchecks.io: Free (up to 20 checks)
 
