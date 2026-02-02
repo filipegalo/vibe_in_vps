@@ -18,5 +18,7 @@ provider "hcloud" {
 }
 
 provider "healthchecksio" {
-  api_key = var.healthchecks_api_key != "" ? var.healthchecks_api_key : "dummy"
+  # If api_key is empty, provider will be configured but resources won't be created (count = 0)
+  # Using coalesce with nonsensitive to avoid "marked value" error during validation
+  api_key = coalesce(var.healthchecks_api_key, "disabled")
 }
