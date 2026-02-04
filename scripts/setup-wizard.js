@@ -886,6 +886,12 @@ async function handleInput(key) {
       console.log(`Enter your IP address in CIDR format (e.g., 1.2.3.4/32):`);
       console.log(`${colors.yellow}Press Enter without typing to cancel${colors.reset}\n`);
 
+      // Temporarily disable raw mode and remove keypress listeners
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false);
+      }
+      process.stdin.removeAllListeners('keypress');
+
       const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
@@ -897,6 +903,7 @@ async function handleInput(key) {
           config.ssh.userIp = answer.trim();
           saveConfig(config);
         }
+        // Restore readline setup and display step
         setupReadline();
         displayStep();
       });
@@ -935,6 +942,9 @@ function setupReadline() {
     input: process.stdin,
     output: process.stdout,
   });
+
+  // Remove all existing keypress listeners to avoid duplicates
+  process.stdin.removeAllListeners('keypress');
 
   readline.emitKeypressEvents(process.stdin);
 
