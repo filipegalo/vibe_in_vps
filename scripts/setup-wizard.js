@@ -20,16 +20,7 @@ const CONFIG_FILE = path.join(process.cwd(), '.setup-config.json');
 
 // Load configuration
 function loadConfig() {
-  try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      const data = fs.readFileSync(CONFIG_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error('Warning: Could not load config file:', error.message);
-  }
-  // Return default config
-  return {
+  const defaultConfig = {
     databases: {
       postgresql: false,
       mysql: false,
@@ -40,6 +31,29 @@ function loadConfig() {
       userIp: '',
     },
   };
+
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = fs.readFileSync(CONFIG_FILE, 'utf8');
+      const loadedConfig = JSON.parse(data);
+
+      // Merge with defaults to ensure all properties exist (backward compatibility)
+      return {
+        databases: {
+          ...defaultConfig.databases,
+          ...(loadedConfig.databases || {}),
+        },
+        ssh: {
+          ...defaultConfig.ssh,
+          ...(loadedConfig.ssh || {}),
+        },
+      };
+    }
+  } catch (error) {
+    console.error('Warning: Could not load config file:', error.message);
+  }
+
+  return defaultConfig;
 }
 
 // Save configuration
@@ -322,7 +336,7 @@ Press ${colors.green}[Next]${colors.reset} to begin!
 ${colors.cyan}Fork the vibe_in_vps repository to your GitHub account${colors.reset}
 
 1. Open your browser and go to:
-   ${colors.blue}https://github.com/YOUR_USERNAME/vibe_in_vps${colors.reset}
+   ${colors.blue}https://github.com/filipegalo/vibe_in_vps${colors.reset}
 
 2. Click the ${colors.bright}"Fork"${colors.reset} button in the top-right corner
 
