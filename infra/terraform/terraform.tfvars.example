@@ -21,8 +21,11 @@ github_repository = "yourusername/vibe_in_vps"
 # location    = "nbg1"        # Nuremberg, Germany
 # project_name = "my-project"
 
-# Optional: Restrict access by IP (default: open to all)
+# Security: SSH is restricted to GitHub Actions IPs + optional additional IPs
 # Get your IP: curl ifconfig.me
-# allowed_ssh_ips   = ["1.2.3.4/32"]           # Restrict SSH to your IP only
+# additional_ssh_ips = ["1.2.3.4/32"]          # Add your IP for direct SSH access
+# additional_ssh_ips = []                      # GitHub Actions only (default)
+
+# HTTP/HTTPS access can be restricted by IP if needed (default: open to all)
 # allowed_http_ips  = ["0.0.0.0/0", "::/0"]    # Keep HTTP open to all
 # allowed_https_ips = ["0.0.0.0/0", "::/0"]    # Keep HTTPS open to all

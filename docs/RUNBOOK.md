@@ -39,12 +39,21 @@ ssh deploy@YOUR_VPS_IP 'docker compose ps'
 
 ### View Logs
 
-```bash
-# Real-time logs
-ssh deploy@YOUR_VPS_IP 'docker compose logs -f app'
+> **Note**: Direct SSH access is restricted to GitHub Actions only. See [Troubleshooting Access](#troubleshooting-access) for how to run commands.
 
-# Recent logs
-ssh deploy@YOUR_VPS_IP 'docker compose logs --tail=100 app'
+**Via GitHub Actions workflow:**
+```yaml
+# Add to your workflow to view logs
+- name: View app logs
+  run: |
+    ssh deploy@${{ secrets.VPS_HOST }} 'docker compose logs --tail=100 app'
+```
+
+**Via Hetzner Console** (for emergency access):
+```bash
+# After connecting via Hetzner Cloud Console
+cd /opt/app
+docker compose logs -f app
 ```
 
 ### GitHub Deployments
@@ -57,17 +66,20 @@ Dashboard: https://healthchecks.io/projects/
 
 ## Database Operations
 
+> **Note**: All database commands must be run via GitHub Actions workflow or Hetzner Cloud Console. See [Troubleshooting Access](#troubleshooting-access) for how to access the VPS.
+
 ### View Database Status
 
 ```bash
-ssh deploy@YOUR_VPS_IP 'docker compose ps postgres mysql redis'
+# Run on VPS (via GitHub Actions or Hetzner Console)
+docker compose ps postgres mysql redis
 ```
 
 ### Connect to Databases
 
 #### PostgreSQL
 ```bash
-ssh deploy@YOUR_VPS_IP
+# After connecting via Hetzner Console or GitHub Actions
 cd /opt/app
 docker compose exec postgres psql -U app -d app
 ```
@@ -79,7 +91,7 @@ Common commands:
 
 #### MySQL
 ```bash
-ssh deploy@YOUR_VPS_IP
+# After connecting via Hetzner Console or GitHub Actions
 cd /opt/app
 docker compose exec mysql mysql -u app -p
 ```
@@ -91,7 +103,7 @@ Common commands:
 
 #### Redis
 ```bash
-ssh deploy@YOUR_VPS_IP
+# After connecting via Hetzner Console or GitHub Actions
 cd /opt/app
 docker compose exec redis redis-cli -a YOUR_PASSWORD
 ```
@@ -104,34 +116,37 @@ Common commands:
 ### Database Logs
 
 ```bash
+# Run on VPS (via GitHub Actions or Hetzner Console)
 # PostgreSQL logs
-ssh deploy@YOUR_VPS_IP 'docker compose logs postgres'
+docker compose logs postgres
 
 # MySQL logs
-ssh deploy@YOUR_VPS_IP 'docker compose logs mysql'
+docker compose logs mysql
 
 # Redis logs
-ssh deploy@YOUR_VPS_IP 'docker compose logs redis'
+docker compose logs redis
 ```
 
 ### Database Restart
 
 ```bash
+# Run on VPS (via GitHub Actions or Hetzner Console)
 # Restart PostgreSQL
-ssh deploy@YOUR_VPS_IP 'docker compose restart postgres'
+docker compose restart postgres
 
 # Restart MySQL
-ssh deploy@YOUR_VPS_IP 'docker compose restart mysql'
+docker compose restart mysql
 
 # Restart Redis
-ssh deploy@YOUR_VPS_IP 'docker compose restart redis'
+docker compose restart redis
 ```
 
 ### Storage Space
 
 Check database volume usage:
 ```bash
-ssh deploy@YOUR_VPS_IP 'docker system df -v'
+# Run on VPS (via GitHub Actions or Hetzner Console)
+docker system df -v
 ```
 
 ### Database Backups
@@ -140,31 +155,44 @@ The backup script at `/opt/app/scripts/db-backup.sh` handles automated backups f
 
 #### Run Manual Backup
 
+Via GitHub Actions workflow:
+```yaml
+- name: Run database backup
+  run: |
+    ssh deploy@${{ secrets.VPS_HOST }} 'cd /opt/app && ./scripts/db-backup.sh'
+```
+
+Or via Hetzner Console:
 ```bash
-ssh deploy@YOUR_VPS_IP 'cd /opt/app && ./scripts/db-backup.sh'
+cd /opt/app && ./scripts/db-backup.sh
 ```
 
 #### View Available Backups
 
-```bash
-ssh deploy@YOUR_VPS_IP 'ls -lh /opt/app/backups/'
+Via GitHub Actions workflow:
+```yaml
+- name: List backups
+  run: |
+    ssh deploy@${{ secrets.VPS_HOST }} 'ls -lh /opt/app/backups/'
 ```
 
 #### Download Backups
 
-```bash
-# Download specific backup
-scp deploy@YOUR_VPS_IP:/opt/app/backups/postgres_20260204_120000.sql.gz ./
-
-# Download all backups
-scp -r deploy@YOUR_VPS_IP:/opt/app/backups/ ./local-backups/
+Backups must be downloaded via GitHub Actions. Add a workflow step:
+```yaml
+- name: Download backup
+  run: |
+    scp deploy@${{ secrets.VPS_HOST }}:/opt/app/backups/postgres_*.sql.gz ./
+- uses: actions/upload-artifact@v4
+  with:
+    name: database-backup
+    path: "*.sql.gz"
 ```
 
 #### Set Up Automated Daily Backups
 
+Via Hetzner Console, edit crontab:
 ```bash
-# SSH to VPS and edit crontab
-ssh deploy@YOUR_VPS_IP
 crontab -e
 
 # Add this line for daily 2 AM backups
@@ -173,9 +201,11 @@ crontab -e
 
 #### Restore Procedures
 
+> **Note**: Restore operations require Hetzner Console access for interactive commands.
+
 **PostgreSQL:**
 ```bash
-ssh deploy@YOUR_VPS_IP
+# Via Hetzner Console
 cd /opt/app
 docker compose stop app
 gunzip -c backups/postgres_TIMESTAMP.sql.gz | docker exec -i postgres psql -U app -d app
@@ -184,7 +214,7 @@ docker compose start app
 
 **MySQL:**
 ```bash
-ssh deploy@YOUR_VPS_IP
+# Via Hetzner Console
 cd /opt/app
 docker compose stop app
 gunzip -c backups/mysql_TIMESTAMP.sql.gz | docker exec -i mysql mysql -u root -p"PASSWORD"
@@ -193,7 +223,7 @@ docker compose start app
 
 **Redis:**
 ```bash
-ssh deploy@YOUR_VPS_IP
+# Via Hetzner Console
 cd /opt/app
 docker compose stop redis
 docker cp backups/redis_TIMESTAMP.rdb redis:/data/dump.rdb
@@ -240,15 +270,14 @@ This is the recommended approach for sensitive values like API keys, database cr
 
 4. **Push changes** - the variable will be available on next deployment.
 
-#### Method 2: Direct SSH Editing (For Non-Sensitive Values)
+#### Method 2: Direct Editing via Hetzner Console (For Non-Sensitive Values)
 
-For non-sensitive configuration values, you can edit the `.env` file directly on the VPS.
+For non-sensitive configuration values, you can edit the `.env` file directly on the VPS using Hetzner Cloud Console.
+
+> **Note**: Direct SSH is restricted to GitHub Actions only. Use [Hetzner Cloud Console](https://console.hetzner.cloud/) for interactive access.
 
 ```bash
-# SSH to the VPS
-ssh deploy@YOUR_VPS_IP
-
-# Edit the environment file
+# After connecting via Hetzner Console
 cd /opt/app
 nano .env
 
@@ -435,36 +464,130 @@ environment:
 | `PORT` | Application port | `3000`, `8080` |
 | `TIMEOUT` | Request timeout (ms) | `30000` |
 
+## Troubleshooting Access
+
+### Why Direct SSH May Not Work
+
+By default, SSH access to the VPS is restricted to GitHub Actions IP ranges only. This is a **security feature**, not a limitation. However, you can easily add your own IP for direct access.
+
+**Benefits of restricted access:**
+- Prevents unauthorized access even if SSH keys are compromised
+- Reduces attack surface - server only accepts connections from known sources
+- Enforces infrastructure-as-code practices for server management
+
+### Enabling Direct SSH Access
+
+#### Method 1: Use Setup Wizard (Easiest)
+
+1. Run `npm run setup-wizard`
+2. Navigate to **Step 5: Configure SSH Access**
+3. Press `E` to enable direct SSH access
+4. Press `I` to set your IP address (find it with `curl ifconfig.me`)
+5. Run the **Provision Infrastructure** workflow to apply changes
+
+#### Method 2: Edit terraform.tfvars
+
+Add your IP address to `infra/terraform/terraform.tfvars`:
+
+```hcl
+# Add your IP for direct SSH access
+additional_ssh_ips = ["YOUR.IP.ADDRESS/32"]
+```
+
+Example:
+```hcl
+# Single IP
+additional_ssh_ips = ["203.0.113.45/32"]
+
+# Multiple IPs (home and office)
+additional_ssh_ips = ["203.0.113.45/32", "198.51.100.10/32"]
+```
+
+Then run the **Provision Infrastructure** workflow to apply changes.
+
+**Note**: GitHub Actions IPs are always included automatically - you only need to add your own IP if you want direct SSH access.
+
+### Running Commands Without Direct SSH
+
+If you prefer to keep SSH restricted to GitHub Actions only, here are your options:
+
+#### Method 1: GitHub Actions Workflow (Recommended)
+
+Add a workflow dispatch for running ad-hoc commands:
+
+```yaml
+# .github/workflows/debug.yml
+name: Debug VPS
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Command to run'
+        required: true
+        default: 'docker compose ps'
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run command on VPS
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -o StrictHostKeyChecking=no deploy@${{ secrets.VPS_HOST }} "${{ github.event.inputs.command }}"
+```
+
+Then go to **Actions > Debug VPS > Run workflow** and enter your command.
+
+#### Method 2: Hetzner Cloud Console (Emergency Access)
+
+For emergencies when you need immediate interactive access:
+
+1. Log in to [Hetzner Cloud Console](https://console.hetzner.cloud/)
+2. Navigate to your project and select the server
+3. Click the **"Console"** button (top-right of server details page)
+4. A browser-based terminal opens with direct server access
+5. Log in as `deploy` user (or `root` if needed)
+
+**Note**: Console access bypasses all firewall rules - use for emergencies only.
+
 ## Common Issues
 
 ### Deployment Failed
 
 **Check**:
 1. GitHub Actions logs
-2. VPS logs: `ssh deploy@VPS_IP 'docker compose logs app'`
-3. Container status: `ssh deploy@VPS_IP 'docker compose ps'`
+2. VPS logs (via GitHub Actions or Hetzner Console - see [Troubleshooting Access](#troubleshooting-access))
+3. Container status: `docker compose ps`
 
 ### App Not Accessible
 
+> **Note**: Run these commands via GitHub Actions workflow or Hetzner Console. See [Troubleshooting Access](#troubleshooting-access).
+
 ```bash
 # Check if container is running
-ssh deploy@YOUR_VPS_IP 'docker compose ps'
+docker compose ps
 
 # Check if app is listening
-ssh deploy@YOUR_VPS_IP 'netstat -tlnp | grep 80'
+netstat -tlnp | grep 80
 
 # Check firewall
-ssh deploy@YOUR_VPS_IP 'sudo ufw status'
+sudo ufw status
 ```
 
 ### Out of Disk Space
 
+> **Note**: Run these commands via GitHub Actions workflow or Hetzner Console. See [Troubleshooting Access](#troubleshooting-access).
+
 ```bash
 # Clean up old images
-ssh deploy@YOUR_VPS_IP 'docker image prune -a -f'
+docker image prune -a -f
 
 # Clean up system
-ssh deploy@YOUR_VPS_IP 'docker system prune -a -f'
+docker system prune -a -f
 ```
 
 ## Rollback Procedures
@@ -476,10 +599,10 @@ ssh deploy@YOUR_VPS_IP 'docker system prune -a -f'
 3. Click commit SHA
 4. Re-run workflow
 
-### Method 2: Manual
+### Method 2: Manual (via Hetzner Console)
 
 ```bash
-ssh deploy@YOUR_VPS_IP
+# After connecting via Hetzner Console
 cd /opt/app
 # Edit docker-compose.yml to use previous image tag
 docker compose pull app

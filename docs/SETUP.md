@@ -85,6 +85,15 @@ Toggling a database automatically:
 - Saves your selection to `.setup-config.json`
 - Configures environment variables and health check dependencies
 
+**Step 5 - SSH Access Configuration:**
+
+| Key | Action |
+|-----|--------|
+| `E` | **E**nable/Disable direct SSH access from your computer |
+| `I` | Set your **I**P address (only available when direct access is enabled) |
+
+By default, SSH access is restricted to GitHub Actions only. If you need to SSH directly from your machine for troubleshooting, enable direct access and add your IP address. Your IP can be found by running `curl ifconfig.me`.
+
 **Step 6 - GitHub Secrets:**
 
 | Key | Action |
@@ -95,17 +104,18 @@ Toggling a database automatically:
 
 Your selections are saved to `.setup-config.json` in the project root. This file persists between wizard sessions, so you can:
 - Stop and resume the wizard later
-- Re-run the wizard to change database selections
-- Track what databases you've enabled
+- Re-run the wizard to change database selections or SSH access settings
+- Track what databases you've enabled and your SSH configuration
 
 ### What the Wizard Does
 
 1. **Guides you through account creation** (GitHub, Hetzner, healthchecks.io)
 2. **Generates SSH keys** in the project's `.ssh/` directory
 3. **Lets you select databases** (PostgreSQL, MySQL, Redis)
-4. **Auto-manages docker-compose.yml** based on your database selections
-5. **Shows you exactly what secrets to add** to GitHub
-6. **Walks you through running workflows** and verifying deployment
+4. **Configures SSH access** (enable direct SSH from your machine)
+5. **Auto-manages docker-compose.yml** based on your database selections
+6. **Shows you exactly what secrets to add** to GitHub
+7. **Walks you through running workflows** and verifying deployment
 
 ---
 
@@ -749,11 +759,8 @@ Visit `http://YOUR_VPS_IP` to see your app live!
 
 **Symptoms**: `curl http://VPS_IP` times out.
 
-**Diagnosis**:
+**Diagnosis** (via GitHub Actions - see [SSH Access](#ssh-access-security) below):
 ```bash
-# SSH to VPS
-ssh deploy@YOUR_VPS_IP
-
 # Check if container is running
 docker compose ps
 
@@ -765,6 +772,80 @@ docker compose logs app
 - Container crashed: Check logs for errors
 - Port not exposed: Verify Dockerfile has `EXPOSE 3000`
 - App not listening: Verify app binds to `0.0.0.0:3000`
+
+### SSH Access Security
+
+**Important**: SSH access to the VPS is restricted by default to GitHub Actions IP ranges only. This is a security feature that prevents unauthorized access to your server.
+
+**Default behavior:**
+- Deployments work normally (GitHub Actions IPs are always whitelisted)
+- Direct SSH from your local machine is blocked unless you add your IP
+- This prevents unauthorized access even if your SSH key is compromised
+
+**Adding your IP for direct SSH access:**
+
+There are two ways to enable direct SSH from your machine:
+
+#### Option 1: Use the Setup Wizard (Easiest)
+
+1. Run `npm run setup-wizard`
+2. Navigate to **Step 5: Configure SSH Access**
+3. Press `E` to enable direct SSH access
+4. Press `I` to enter your IP address (find it with `curl ifconfig.me`)
+5. Run the **Provision Infrastructure** workflow to apply changes
+
+The wizard saves your configuration to `.setup-config.json` for persistence.
+
+#### Option 2: Edit terraform.tfvars Manually
+
+1. Edit `infra/terraform/terraform.tfvars`:
+   ```hcl
+   # Add your IP address (find it with: curl ifconfig.me)
+   additional_ssh_ips = ["YOUR.IP.ADDRESS/32"]
+   ```
+
+2. Run the **Provision Infrastructure** workflow to apply changes
+
+**Example:**
+```hcl
+# Allow SSH from your home IP
+additional_ssh_ips = ["203.0.113.45/32"]
+
+# Allow SSH from multiple IPs
+additional_ssh_ips = ["203.0.113.45/32", "198.51.100.10/32"]
+```
+
+**How to run commands without direct SSH:**
+
+#### Use GitHub Actions Workflow (When SSH is disabled)
+
+Create a workflow dispatch to run commands remotely:
+
+1. Go to **Actions** tab in your repository
+2. Create or use an existing workflow with SSH access
+3. The deployment workflow already has SSH access - you can add debug steps there
+
+Example: Add a debug step to `.github/workflows/deploy.yml`:
+```yaml
+- name: Debug - Check container status
+  run: |
+    ssh -o StrictHostKeyChecking=no deploy@${{ secrets.VPS_HOST }} << 'EOF'
+      docker compose ps
+      docker compose logs --tail=50 app
+    EOF
+```
+
+#### Use Hetzner Cloud Console (Emergency Access)
+
+For emergency situations when you need immediate access:
+
+1. Log in to [Hetzner Cloud Console](https://console.hetzner.cloud/)
+2. Select your project and server
+3. Click **"Console"** button (top right of server details)
+4. This opens a browser-based console with direct access
+5. Log in as the `deploy` user
+
+**Note**: The console provides full access regardless of firewall rules.
 
 ### Issue: "Port 3000 already in use"
 
@@ -1012,11 +1093,12 @@ const REDIS_URL = process.env.REDIS_URL
 // redis://:PASSWORD@redis:6379
 ```
 
-#### From SSH (Development/Debugging)
+#### From Hetzner Console (Development/Debugging)
 
-SSH to your VPS:
+> **Note**: Direct SSH is restricted to GitHub Actions only. Use [Hetzner Cloud Console](https://console.hetzner.cloud/) for interactive database access. See [SSH Access Security](#ssh-access-security) for details.
+
+After connecting via Hetzner Console:
 ```bash
-ssh deploy@YOUR_VPS_IP
 cd /opt/app
 ```
 
@@ -1051,10 +1133,18 @@ vibe_in_vps includes a built-in backup script (`deploy/scripts/db-backup.sh`) th
 
 ### Running Manual Backups
 
-To run a backup manually, SSH to your VPS and execute the backup script:
+To run a backup manually, use a GitHub Actions workflow or Hetzner Console.
 
+**Via GitHub Actions** (add to your workflow):
+```yaml
+- name: Run database backup
+  run: |
+    ssh deploy@${{ secrets.VPS_HOST }} 'cd /opt/app && ./scripts/db-backup.sh'
+```
+
+**Via Hetzner Console:**
 ```bash
-ssh deploy@YOUR_VPS_IP 'cd /opt/app && ./scripts/db-backup.sh'
+cd /opt/app && ./scripts/db-backup.sh
 ```
 
 The script will:
@@ -1075,36 +1165,42 @@ Backups are stored in `/opt/app/backups/` with timestamped filenames:
 
 ### Setting Up Automated Daily Backups
 
-To run backups automatically every day at 2:00 AM:
+To run backups automatically every day at 2:00 AM, use Hetzner Console to set up a cron job:
 
-```bash
-# SSH to your VPS
-ssh deploy@YOUR_VPS_IP
+1. Connect via [Hetzner Cloud Console](https://console.hetzner.cloud/)
+2. Edit crontab:
+   ```bash
+   crontab -e
+   ```
+3. Add this line for daily backups at 2:00 AM:
+   ```
+   0 2 * * * cd /opt/app && ./scripts/db-backup.sh >> /opt/app/backups/backup.log 2>&1
+   ```
+4. Save and exit
 
-# Edit crontab
-crontab -e
-
-# Add this line for daily backups at 2:00 AM
-0 2 * * * cd /opt/app && ./scripts/db-backup.sh >> /opt/app/backups/backup.log 2>&1
-```
-
-Save and exit. The cron job will run daily and append logs to `/opt/app/backups/backup.log`.
+The cron job will run daily and append logs to `/opt/app/backups/backup.log`.
 
 ### Viewing and Downloading Backups
 
-**List available backups:**
-```bash
-ssh deploy@YOUR_VPS_IP 'ls -lh /opt/app/backups/'
+**List available backups** (via GitHub Actions workflow):
+```yaml
+- name: List backups
+  run: |
+    ssh deploy@${{ secrets.VPS_HOST }} 'ls -lh /opt/app/backups/'
 ```
 
-**Download a backup to your local machine:**
-```bash
-# Download a specific PostgreSQL backup
-scp deploy@YOUR_VPS_IP:/opt/app/backups/postgres_20260204_120000.sql.gz ./
-
-# Download all backups
-scp -r deploy@YOUR_VPS_IP:/opt/app/backups/ ./local-backups/
+**Download backups via GitHub Actions:**
+```yaml
+- name: Download backups
+  run: |
+    scp deploy@${{ secrets.VPS_HOST }}:/opt/app/backups/*.sql.gz ./
+- uses: actions/upload-artifact@v4
+  with:
+    name: database-backups
+    path: "*.sql.gz"
 ```
+
+Then download the artifact from the GitHub Actions run page.
 
 ### Backup Retention Policy
 
@@ -1114,11 +1210,12 @@ scp -r deploy@YOUR_VPS_IP:/opt/app/backups/ ./local-backups/
 
 ### Restore Procedures
 
+> **Note**: Restore operations require Hetzner Console access for interactive commands. Connect via [Hetzner Cloud Console](https://console.hetzner.cloud/).
+
 #### Restore PostgreSQL
 
 ```bash
-# SSH to your VPS
-ssh deploy@YOUR_VPS_IP
+# Via Hetzner Console
 cd /opt/app
 
 # Stop the app to prevent database writes during restore
@@ -1134,8 +1231,7 @@ docker compose start app
 #### Restore MySQL
 
 ```bash
-# SSH to your VPS
-ssh deploy@YOUR_VPS_IP
+# Via Hetzner Console
 cd /opt/app
 
 # Stop the app to prevent database writes during restore
@@ -1151,8 +1247,7 @@ docker compose start app
 #### Restore Redis
 
 ```bash
-# SSH to your VPS
-ssh deploy@YOUR_VPS_IP
+# Via Hetzner Console
 cd /opt/app
 
 # Stop Redis
@@ -1173,7 +1268,7 @@ After successful deployment:
 
 1. **Add databases**: See [Database Setup](#database-setup) section
 2. **Configure custom domain** (coming soon - Cloudflare integration)
-3. **Add environment variables**: SSH to VPS, edit `/opt/app/.env`
+3. **Add environment variables**: Via GitHub Secrets (recommended) or Hetzner Console - see [docs/RUNBOOK.md](RUNBOOK.md)
 4. **Set up monitoring alerts**: Configure healthchecks.io channels
 
 ---

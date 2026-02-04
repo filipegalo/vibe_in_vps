@@ -154,9 +154,11 @@ This project explicitly does NOT support:
 - `server_type` - Hetzner server type (default: "cpx22" - 2 vCPU, 4GB RAM)
 - `location` - Datacenter location (default: "nbg1")
 - `project_name` - Project identifier for labels (default: "vibe-in-vps")
-- `allowed_ssh_ips` - IP addresses allowed to SSH (default: ["0.0.0.0/0", "::/0"])
+- `additional_ssh_ips` - Additional IPs allowed SSH access beyond GitHub Actions (default: [])
 - `allowed_http_ips` - IP addresses allowed HTTP access (default: ["0.0.0.0/0", "::/0"])
 - `allowed_https_ips` - IP addresses allowed HTTPS access (default: ["0.0.0.0/0", "::/0"])
+
+**Note**: SSH access automatically includes GitHub Actions IP ranges (fetched from `https://api.github.com/meta`). Use `additional_ssh_ips` to add your own IP for direct SSH access.
 
 ### Required for GitHub Secrets (Initial Setup)
 - `HETZNER_TOKEN` - Hetzner Cloud API token
@@ -182,8 +184,12 @@ This project explicitly does NOT support:
 ### Issue: Cloud-init still running when deployment starts
 **Solution**: Setup workflow waits for cloud-init completion marker (`/opt/app/.cloud-init-complete`) before finishing
 
-### Issue: SSH permission denied
-**Solution**: Check SSH key permissions (`chmod 600`) and correct user (deploy, not root)
+### Issue: SSH permission denied / connection refused
+**Solution**: SSH is restricted to GitHub Actions IP ranges by default. To enable direct SSH:
+1. Use setup wizard Step 5 to add your IP, OR
+2. Edit `terraform.tfvars`: `additional_ssh_ips = ["YOUR.IP/32"]`
+3. Re-run the Provision Infrastructure workflow
+Alternatively, use GitHub Actions workflows or Hetzner Cloud Console. See docs/RUNBOOK.md for details.
 
 ### Issue: Docker build fails
 **Solution**: Test locally first with `scripts/test-local.sh`
@@ -264,6 +270,31 @@ This project explicitly does NOT support:
   - Chose manual uncomment over automatic (explicit is better than implicit)
 - **Documentation**: Complete sections in SETUP.md and RUNBOOK.md for operations
 - **Migration**: Existing users can adopt without changes, backward compatible
+
+### 2026-02-04: SSH Access - GitHub Actions + Optional User IPs
+- **Decided**: SSH access restricted to GitHub Actions IPs by default, with option to add user IPs
+- **Rationale**: Balance security with developer convenience
+- **Implementation**:
+  - Terraform fetches GitHub Actions IP ranges from `https://api.github.com/meta` (always included)
+  - `additional_ssh_ips` variable allows users to add their own IPs
+  - Setup wizard Step 5 provides easy configuration (E to toggle, I to set IP)
+  - Configuration persisted in `.setup-config.json`
+  - HTTP/HTTPS remain open to all (public web access)
+- **Default behavior**:
+  - GitHub Actions always have SSH access (for deployments)
+  - Direct SSH from developer machines blocked unless IP is added
+- **How to enable direct SSH**:
+  - Option 1: Setup wizard Step 5 (easiest)
+  - Option 2: Edit `terraform.tfvars`: `additional_ssh_ips = ["YOUR.IP/32"]`
+  - Then re-run Provision Infrastructure workflow
+- **Trade-offs**:
+  - Slightly more complex setup for direct SSH
+  - Accepted because: Security by default, easy opt-in for convenience
+- **Mitigations**:
+  - Setup wizard makes adding IP easy
+  - Hetzner Cloud Console provides emergency access
+  - GitHub Actions workflows can run any command via SSH
+- **Documentation**: Updated SETUP.md, RUNBOOK.md, and terraform.tfvars.example
 
 ---
 

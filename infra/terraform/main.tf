@@ -2,6 +2,23 @@
 # Hetzner VPS + healthchecks.io monitoring
 #
 
+# Fetch GitHub Actions IP ranges
+data "http" "github_meta" {
+  url = "https://api.github.com/meta"
+
+  request_headers = {
+    Accept = "application/vnd.github+json"
+  }
+}
+
+# Parse GitHub Actions IP ranges from API response
+locals {
+  github_meta        = jsondecode(data.http.github_meta.response_body)
+  github_actions_ips = local.github_meta.actions
+  # Combine GitHub Actions IPs with user-provided additional IPs
+  all_ssh_ips        = concat(local.github_actions_ips, var.additional_ssh_ips)
+}
+
 # SSH key resource
 resource "hcloud_ssh_key" "deploy" {
   name       = "${var.server_name}-deploy-key"
@@ -40,12 +57,14 @@ resource "hcloud_server" "vps" {
 resource "hcloud_firewall" "web" {
   name = "${var.server_name}-firewall"
 
-  # SSH access - customizable source IPs
+  # SSH access - restricted to GitHub Actions + optional additional IPs
+  # GitHub Actions IPs are always included for automated deployments
+  # Additional IPs can be configured via additional_ssh_ips variable
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "22"
-    source_ips = var.allowed_ssh_ips
+    source_ips = local.all_ssh_ips
   }
 
   # HTTP access - customizable source IPs

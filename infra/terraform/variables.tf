@@ -45,10 +45,10 @@ variable "project_name" {
   default     = "vibe-in-vps"
 }
 
-variable "allowed_ssh_ips" {
-  description = "List of IP addresses/CIDR blocks allowed to SSH (port 22). Use ['0.0.0.0/0', '::/0'] for all IPs."
+variable "additional_ssh_ips" {
+  description = "Additional IP addresses/CIDR blocks allowed to SSH (port 22). GitHub Actions IPs are always included. Use [] for GitHub Actions only, or add your IP: ['1.2.3.4/32']"
   type        = list(string)
-  default     = ["0.0.0.0/0", "::/0"]
+  default     = []
 }
 
 variable "allowed_http_ips" {

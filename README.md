@@ -297,21 +297,29 @@ git push origin main
 <details>
 <summary><strong>Set Environment Variables</strong></summary>
 
+Direct SSH requires adding your IP first (see [SSH Access](#ssh-access) below).
+
 ```bash
 ssh deploy@YOUR_VPS_IP
 cd /opt/app && nano .env
 docker compose restart app
 ```
 
+Or use Hetzner Cloud Console for browser-based access.
+
 </details>
 
 <details>
 <summary><strong>View Logs</strong></summary>
 
+Direct SSH requires adding your IP first (see [SSH Access](#ssh-access) below).
+
 ```bash
 ssh deploy@YOUR_VPS_IP
 docker compose logs -f app
 ```
+
+Or add a debug step to your GitHub Actions workflow.
 
 </details>
 
@@ -329,6 +337,19 @@ Go to **Actions** > **Provision Infrastructure** > Run workflow with "Destroy in
 <br />
 
 ## Troubleshooting
+
+<details>
+<summary><strong>SSH connection refused</strong></summary>
+
+SSH is restricted to GitHub Actions IPs by default. To enable direct SSH:
+
+1. Run `npm run setup-wizard` and go to Step 5, OR
+2. Edit `terraform.tfvars`: `additional_ssh_ips = ["YOUR.IP/32"]`
+3. Run the **Provision Infrastructure** workflow
+
+Alternative: Use [Hetzner Cloud Console](https://console.hetzner.cloud/) for browser-based access.
+
+</details>
 
 <details>
 <summary><strong>App not accessible</strong></summary>

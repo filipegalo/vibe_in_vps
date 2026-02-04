@@ -35,6 +35,10 @@ function loadConfig() {
       mysql: false,
       redis: false,
     },
+    ssh: {
+      enableDirectAccess: false,
+      userIp: '',
+    },
   };
 }
 
@@ -428,7 +432,38 @@ ${colors.dim}Tip: You can change this later by re-running the wizard${colors.res
     `,
   },
   {
-    title: 'Step 5: Get API Tokens',
+    title: 'Step 5: Configure SSH Access',
+    content: () => `
+${colors.cyan}SSH access security configuration${colors.reset}
+
+${colors.bright}Security Default:${colors.reset}
+SSH access is ${colors.green}automatically restricted to GitHub Actions${colors.reset} IP ranges only.
+This prevents unauthorized access to your VPS.
+
+${colors.bright}Do you need direct SSH access?${colors.reset}
+If you want to SSH directly from your computer for troubleshooting, you can
+add your IP address to the whitelist.
+
+${colors.bright}Current Configuration:${colors.reset}
+  Direct SSH Access: ${config.ssh.enableDirectAccess ? `${colors.green}Enabled${colors.reset}` : `${colors.dim}Disabled${colors.reset}`}
+  ${config.ssh.userIp ? `Your IP: ${colors.cyan}${config.ssh.userIp}${colors.reset}` : ''}
+
+${colors.bright}Your Current IP Address:${colors.reset}
+  Run this command to find your IP: ${colors.dim}curl ifconfig.me${colors.reset}
+
+${colors.yellow}Keys:${colors.reset}
+  ${colors.green}[E]${colors.reset} Enable/Disable direct SSH access
+  ${colors.blue}[I]${colors.reset} Set your IP address (when enabled)
+
+${colors.dim}Note: GitHub Actions will always have SSH access regardless of this setting${colors.reset}
+
+${colors.bright}Recommendation:${colors.reset}
+  • ${colors.green}Enable${colors.reset} if you need to troubleshoot directly
+  • ${colors.yellow}Disable${colors.reset} for maximum security (use GitHub Actions workflows)
+    `,
+  },
+  {
+    title: 'Step 6: Get API Tokens',
     content: `
 ${colors.cyan}Collect API tokens from each service${colors.reset}
 
@@ -451,7 +486,7 @@ ${colors.green}✓ Checkpoint:${colors.reset} API tokens copied and ready to pas
     `,
   },
   {
-    title: 'Step 6: Configure GitHub Secrets',
+    title: 'Step 7: Configure GitHub Secrets',
     content: () => {
       const keys = sshKeysExist() ? getSSHKeys() : null;
 
@@ -508,7 +543,7 @@ ${keys ? `${colors.yellow}Keys:${colors.reset}\n  ${colors.green}[K]${colors.res
     },
   },
   {
-    title: 'Step 7: Run Infrastructure Workflow',
+    title: 'Step 8: Run Infrastructure Workflow',
     content: `
 ${colors.cyan}Provision your VPS using GitHub Actions${colors.reset}
 
@@ -536,7 +571,7 @@ ${colors.green}✓ Checkpoint:${colors.reset} Infrastructure provisioned success
     `,
   },
   {
-    title: 'Step 8: Add Deployment Secrets',
+    title: 'Step 9: Add Deployment Secrets',
     content: `
 ${colors.cyan}Configure secrets for automatic deployments${colors.reset}
 
@@ -558,7 +593,7 @@ ${colors.bright}Now automatic deployments will work!${colors.reset}
     `,
   },
   {
-    title: 'Step 9: Deploy Your Application',
+    title: 'Step 10: Deploy Your Application',
     content: `
 ${colors.cyan}Trigger your first deployment${colors.reset}
 
@@ -582,7 +617,7 @@ ${colors.green}✓ Checkpoint:${colors.reset} First deployment complete!
     `,
   },
   {
-    title: 'Step 10: Verify Your Deployment',
+    title: 'Step 11: Verify Your Deployment',
     content: `
 ${colors.cyan}Check that your app is running${colors.reset}
 
@@ -795,8 +830,8 @@ async function handleInput(key) {
   }
 
   // Database toggle keys (only on Step 4)
-  if (currentStep === 4) {
-    // Step 4 (index 4) is database selection
+  if (currentStep === 3) {
+    // Step 4 (index 3) is database selection
     if (key === '1') {
       config.databases.postgresql = !config.databases.postgresql;
       saveConfig(config);
@@ -814,6 +849,44 @@ async function handleInput(key) {
       saveConfig(config);
       applyDatabaseConfig();
       displayStep();
+      return;
+    }
+  }
+
+  // SSH access configuration (only on Step 5)
+  if (currentStep === 4) {
+    // Step 5 (index 4) is SSH access configuration
+    if (key.toLowerCase() === 'e') {
+      // Toggle direct SSH access
+      config.ssh.enableDirectAccess = !config.ssh.enableDirectAccess;
+      if (!config.ssh.enableDirectAccess) {
+        config.ssh.userIp = ''; // Clear IP when disabling
+      }
+      saveConfig(config);
+      displayStep();
+      return;
+    } else if (key.toLowerCase() === 'i' && config.ssh.enableDirectAccess) {
+      // Set user IP address
+      clearScreen();
+      console.log(`${colors.bright}Enter Your IP Address${colors.reset}\n`);
+      console.log(`Run this command to get your IP: ${colors.dim}curl ifconfig.me${colors.reset}\n`);
+      console.log(`Enter your IP address in CIDR format (e.g., 1.2.3.4/32):`);
+      console.log(`${colors.yellow}Press Enter without typing to cancel${colors.reset}\n`);
+
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      rl.question('Your IP: ', (answer) => {
+        rl.close();
+        if (answer.trim()) {
+          config.ssh.userIp = answer.trim();
+          saveConfig(config);
+        }
+        setupReadline();
+        displayStep();
+      });
       return;
     }
   }
