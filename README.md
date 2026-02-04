@@ -41,7 +41,7 @@
 
 > **The Problem**: You built something cool. Now you need to deploy it. Suddenly you're neck-deep in Kubernetes, AWS consoles, and YAML files. You just wanted to ship your app.
 
-> **The Solution**: Fork this repo, add 5 secrets, run a workflow. Done. Your app is live.
+> **The Solution**: Fork this repo, add 4 secrets, run a workflow. Done. Your app is live.
 
 <br />
 
@@ -137,7 +137,7 @@ Follow the [Complete Setup Guide](docs/SETUP.md) with screenshots and detailed e
 ```
 1. Fork this repository
         |
-2. Add 5 GitHub secrets (API tokens, SSH keys)
+2. Add 4 GitHub secrets (API tokens, SSH keys)
         |
 3. Run the setup workflow in GitHub Actions
         |

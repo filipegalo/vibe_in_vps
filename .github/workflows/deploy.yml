@@ -102,19 +102,19 @@ jobs:
 
       - name: Copy deployment files to VPS
         run: |
-          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
-          scp -i ~/.ssh/deploy_key deploy/update.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml deploy@${{ secrets.VPS_HOST }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/update.sh deploy@${{ secrets.VPS_HOST }}:/opt/app/
 
           # Copy backup script if it exists
           if [ -f deploy/scripts/db-backup.sh ]; then
-            ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'mkdir -p /opt/app/scripts'
-            scp -i ~/.ssh/deploy_key deploy/scripts/db-backup.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/app/scripts/
-            ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'chmod +x /opt/app/scripts/db-backup.sh'
+            ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} 'mkdir -p /opt/app/scripts'
+            scp -i ~/.ssh/deploy_key deploy/scripts/db-backup.sh deploy@${{ secrets.VPS_HOST }}:/opt/app/scripts/
+            ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} 'chmod +x /opt/app/scripts/db-backup.sh'
           fi
 
       - name: Deploy application
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
             export GITHUB_REPOSITORY=${{ github.repository }}
             export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
             export GITHUB_ACTOR=${{ github.actor }}
@@ -151,7 +151,7 @@ jobs:
 
       - name: Verify deployment
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
             cd /opt/app
             docker compose ps
             docker compose logs --tail=50 app

@@ -164,7 +164,8 @@ This project explicitly does NOT support:
 - `HETZNER_TOKEN` - Hetzner Cloud API token
 - `SSH_PUBLIC_KEY` - SSH public key for server access
 - `SSH_PRIVATE_KEY` - SSH private key for deployment
-- `VPS_USER` - SSH username (set to "deploy")
+
+**Note**: The SSH user is hardcoded to `deploy` in the workflows - no secret configuration needed.
 
 ### Optional GitHub Secrets
 - `HEALTHCHECKS_API_KEY` - healthchecks.io API key (leave empty to disable monitoring)

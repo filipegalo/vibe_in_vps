@@ -371,14 +371,7 @@ Back in the GitHub Secrets page, add these secrets one by one:
    - Should be MULTIPLE lines
 4. Click **"Add secret"**
 
-#### Secret 4: VPS_USER
-
-1. Click **"New repository secret"**
-2. **Name**: `VPS_USER`
-3. **Secret**: Type exactly: `deploy`
-4. Click **"Add secret"**
-
-#### Secret 5: HEALTHCHECKS_API_KEY (Optional)
+#### Secret 4: HEALTHCHECKS_API_KEY (Optional)
 
 **If you want monitoring**:
 1. Click **"New repository secret"**
@@ -394,12 +387,13 @@ Back in the GitHub Secrets page, add these secrets one by one:
 
 ### 4.5 Verify Secrets
 
-You should see 5 secrets listed:
+You should see 4 secrets listed:
 - `HETZNER_TOKEN`
 - `HEALTHCHECKS_API_KEY`
 - `SSH_PRIVATE_KEY`
 - `SSH_PUBLIC_KEY`
-- `VPS_USER`
+
+**Note**: The SSH user is always `deploy` - this is automatically configured by cloud-init and requires no secret configuration.
 
 **Note**: After running the setup workflow in Step 5, you'll add 2 more secrets (`VPS_HOST` and `HEALTHCHECK_PING_URL`) for automatic deployments.
 
@@ -743,7 +737,7 @@ Visit `http://YOUR_VPS_IP` to see your app live!
 
 **Fix**:
 1. Go to Settings → Secrets → Actions
-2. Verify all 5 secrets exist
+2. Verify all 4 secrets exist
 3. Re-run the workflow
 
 ### Issue: Workflow Failed - "SSH connection refused"

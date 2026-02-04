@@ -523,20 +523,19 @@ ${colors.bright}Navigate to Secrets:${colors.reset}
 2. Click Settings → Secrets and variables → Actions
 3. Click "New repository secret" for each:
 
-${colors.bright}Required Secrets (5):${colors.reset}
+${colors.bright}Required Secrets (4):${colors.reset}
 
 ${colors.yellow}HETZNER_TOKEN${colors.reset}
   Paste your Hetzner API token
 
 ${sshInstructions}
-${colors.yellow}VPS_USER${colors.reset}
-  Type exactly: ${colors.bright}deploy${colors.reset}
-
 ${colors.yellow}HEALTHCHECKS_API_KEY${colors.reset}
   Paste your healthchecks.io API key
   ${colors.dim}(or leave empty if not using monitoring)${colors.reset}
 
 ${getDatabaseSecretsContent()}
+
+${colors.dim}Note: The SSH user is always "deploy" - automatically configured, no secret needed.${colors.reset}
 
 ${keys ? `${colors.yellow}Keys:${colors.reset}\n  ${colors.green}[K]${colors.reset} View full SSH keys for copying\n\n` : ''}${colors.green}✓ Checkpoint:${colors.reset} All secrets added to GitHub
 `;

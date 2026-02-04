@@ -36,9 +36,9 @@ output "github_secrets_summary" {
   Add these secrets to your GitHub repository:
 
   VPS_HOST: ${hcloud_server.vps.ipv4_address}
-  VPS_SSH_KEY: <your-private-ssh-key>
-  VPS_USER: deploy
   ${length(healthchecksio_check.app) > 0 ? "HEALTHCHECK_PING_URL: ${healthchecksio_check.app[0].ping_url}" : "HEALTHCHECK_PING_URL: (healthchecks.io disabled)"}
+
+  Note: SSH user is always "deploy" (no configuration needed).
 
   Then push to main branch to trigger deployment.
   EOT
