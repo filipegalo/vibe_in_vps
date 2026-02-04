@@ -200,6 +200,241 @@ docker cp backups/redis_TIMESTAMP.rdb redis:/data/dump.rdb
 docker compose start redis
 ```
 
+## Application Management
+
+### Managing Environment Variables
+
+Your application can access environment variables defined in the `.env` file on the VPS. There are two methods to configure them:
+
+#### Method 1: Via GitHub Secrets (Recommended for Secrets)
+
+This is the recommended approach for sensitive values like API keys, database credentials, and tokens.
+
+1. **Add the secret in GitHub**:
+   - Go to your repository on GitHub
+   - Navigate to `Settings` > `Secrets and variables` > `Actions`
+   - Click `New repository secret`
+   - Enter the name (e.g., `API_KEY`) and value
+
+2. **Update the deployment workflow** to pass the secret to the VPS:
+
+   Edit `.github/workflows/deploy.yml` and add your variable to the SSH deployment step:
+   ```yaml
+   - name: Deploy to VPS
+     run: |
+       ssh deploy@${{ secrets.VPS_HOST }} << 'EOF'
+         cd /opt/app
+         echo "API_KEY=${{ secrets.API_KEY }}" >> .env
+         docker compose pull app
+         docker compose up -d app
+       EOF
+   ```
+
+3. **Reference the variable in docker-compose.yml**:
+   ```yaml
+   services:
+     app:
+       environment:
+         - API_KEY=${API_KEY}
+   ```
+
+4. **Push changes** - the variable will be available on next deployment.
+
+#### Method 2: Direct SSH Editing (For Non-Sensitive Values)
+
+For non-sensitive configuration values, you can edit the `.env` file directly on the VPS.
+
+```bash
+# SSH to the VPS
+ssh deploy@YOUR_VPS_IP
+
+# Edit the environment file
+cd /opt/app
+nano .env
+
+# Add your variables
+# Example contents:
+# NODE_ENV=production
+# LOG_LEVEL=info
+# MAX_CONNECTIONS=100
+
+# Save and exit (Ctrl+X, Y, Enter in nano)
+
+# Restart the app to pick up changes
+docker compose restart app
+```
+
+#### Environment Block Structure
+
+The `docker-compose.yml` environment section defines which variables are passed to your container:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    environment:
+      - NODE_ENV=production
+      # Add your custom variables here:
+      - API_KEY=${API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - LOG_LEVEL=${LOG_LEVEL:-info}  # Default to 'info' if not set
+```
+
+#### Examples
+
+**Adding a DATABASE_URL**:
+```bash
+# In GitHub Secrets, add:
+# Name: DATABASE_URL
+# Value: postgresql://user:password@host:5432/dbname
+
+# In docker-compose.yml:
+environment:
+  - DATABASE_URL=${DATABASE_URL}
+```
+
+**Adding multiple variables**:
+```bash
+# In .env on VPS:
+NODE_ENV=production
+LOG_LEVEL=info
+MAX_FILE_SIZE=10485760
+CACHE_TTL=3600
+```
+
+#### Best Practices
+
+- **Never commit secrets** to git (`.env` is in `.gitignore`)
+- **Use GitHub Secrets** for API keys, passwords, tokens, and credentials
+- **Use direct SSH editing** for non-sensitive runtime configuration
+- **Document required variables** in `.env.example` for other developers
+- **Use defaults** with `${VAR:-default}` syntax for optional variables
+
+### Customizing Application Configuration
+
+> **Before You Start Customizing**
+>
+> If you're building a new app or making significant changes, check [`app/PROMPT.md`](../app/PROMPT.md) for AI coding assistant prompts. These templates help you generate compatible code with the correct port (3000), health endpoint (`/health`), and Docker configuration.
+
+#### Changing the Health Endpoint
+
+The health check endpoint is used by Docker to verify your application is running correctly.
+
+**Default configuration** (in `app/Dockerfile`):
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+```
+
+**To change the endpoint** (e.g., to `/api/health` or `/status`):
+
+1. Edit `app/Dockerfile`:
+   ```dockerfile
+   # Change /health to your endpoint
+   HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+     CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+   ```
+
+2. Update `deploy/docker-compose.yml` health check:
+   ```yaml
+   healthcheck:
+     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+     interval: 30s
+     timeout: 10s
+     retries: 3
+     start_period: 40s
+   ```
+
+3. Commit and push to deploy the changes.
+
+**Note**: Your application must respond with HTTP 200 on the health endpoint for the check to pass.
+
+#### Changing the Exposed Port
+
+**Default configuration**:
+- Container port: `3000` (defined in `app/Dockerfile`)
+- Host port: `80` (defined in `deploy/docker-compose.yml`)
+- External access: `http://YOUR_VPS_IP` (port 80)
+
+**To change the container port** (e.g., to 8080):
+
+1. Edit `app/Dockerfile`:
+   ```dockerfile
+   # Change the exposed port
+   EXPOSE 8080
+
+   # Update the health check URL
+   HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+     CMD node -e "require('http').get('http://localhost:8080/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+   ```
+
+2. Edit `deploy/docker-compose.yml`:
+   ```yaml
+   services:
+     app:
+       ports:
+         - "80:8080"  # Host:Container
+       healthcheck:
+         test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+   ```
+
+3. Commit and push to deploy.
+
+**To change the host port** (e.g., to expose on port 8080 instead of 80):
+
+1. Edit `deploy/docker-compose.yml`:
+   ```yaml
+   services:
+     app:
+       ports:
+         - "8080:3000"  # Now accessible at http://YOUR_VPS_IP:8080
+   ```
+
+2. Update Terraform firewall rules in `infra/terraform/main.tf`:
+   ```hcl
+   rule {
+     direction  = "in"
+     protocol   = "tcp"
+     port       = "8080"
+     source_ips = var.allowed_http_ips
+   }
+   ```
+
+3. Run the infrastructure workflow to update firewall rules.
+
+4. Commit and push to deploy.
+
+**Warning**: Changing the host port from 80 requires updating Hetzner firewall rules via Terraform, otherwise the port will be blocked.
+
+#### Environment-specific Configuration
+
+Use environment variables to configure application behavior for different environments:
+
+```bash
+# Production settings (in .env on VPS)
+NODE_ENV=production
+LOG_LEVEL=warn
+DEBUG=false
+CACHE_ENABLED=true
+
+# Or via docker-compose.yml environment section
+environment:
+  - NODE_ENV=production
+  - LOG_LEVEL=${LOG_LEVEL:-warn}
+  - DEBUG=${DEBUG:-false}
+  - CACHE_ENABLED=${CACHE_ENABLED:-true}
+```
+
+**Common environment variables**:
+
+| Variable | Purpose | Example Values |
+|----------|---------|----------------|
+| `NODE_ENV` | Runtime environment | `production`, `development` |
+| `LOG_LEVEL` | Logging verbosity | `error`, `warn`, `info`, `debug` |
+| `DEBUG` | Enable debug mode | `true`, `false` |
+| `PORT` | Application port | `3000`, `8080` |
+| `TIMEOUT` | Request timeout (ms) | `30000` |
+
 ## Common Issues
 
 ### Deployment Failed

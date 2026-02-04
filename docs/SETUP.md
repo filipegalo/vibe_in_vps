@@ -590,6 +590,14 @@ If you enabled healthchecks.io:
 
 Now let's replace the example app with your own application.
 
+> **Using an AI Coding Assistant?**
+>
+> Check [`app/PROMPT.md`](../app/PROMPT.md) for ready-to-use prompts you can give to Claude, Cursor, GitHub Copilot, or ChatGPT. These templates ensure your generated app includes the critical requirements:
+> - Port 3000 exposed
+> - `/health` endpoint returning HTTP 200
+> - `HEALTHCHECK` command in Dockerfile
+> - Environment variables for configuration
+
 ### 7.1 Clone Your Repository Locally
 
 ```bash

@@ -226,6 +226,8 @@ vibe_in_vps/
 
 Your application must have:
 
+> **Building a new app?** Check [`app/PROMPT.md`](app/PROMPT.md) for ready-to-use AI coding assistant prompts that ensure your app meets all deployment requirements.
+
 <details open>
 <summary><strong>1. A Dockerfile</strong> that exposes port 3000</summary>
 
