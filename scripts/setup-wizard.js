@@ -10,7 +10,270 @@
 const readline = require('readline');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const fs = require('fs');
+const path = require('path');
 const execAsync = promisify(exec);
+const crypto = require('crypto');
+
+// Configuration file path
+const CONFIG_FILE = path.join(process.cwd(), '.setup-config.json');
+
+// Load configuration
+function loadConfig() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = fs.readFileSync(CONFIG_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Warning: Could not load config file:', error.message);
+  }
+  // Return default config
+  return {
+    databases: {
+      postgresql: false,
+      mysql: false,
+      redis: false,
+    },
+  };
+}
+
+// Save configuration
+function saveConfig(config) {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Warning: Could not save config file:', error.message);
+  }
+}
+
+// SSH key management
+const SSH_DIR = path.join(process.cwd(), '.ssh');
+const PRIVATE_KEY_PATH = path.join(SSH_DIR, 'id_ed25519');
+const PUBLIC_KEY_PATH = path.join(SSH_DIR, 'id_ed25519.pub');
+
+function sshKeysExist() {
+  return fs.existsSync(PRIVATE_KEY_PATH) && fs.existsSync(PUBLIC_KEY_PATH);
+}
+
+async function generateSSHKeys() {
+  try {
+    // Create .ssh directory if it doesn't exist
+    if (!fs.existsSync(SSH_DIR)) {
+      fs.mkdirSync(SSH_DIR, { mode: 0o700 });
+    }
+
+    // Delete existing keys if they exist (to avoid ssh-keygen's interactive prompt)
+    if (fs.existsSync(PRIVATE_KEY_PATH)) {
+      fs.unlinkSync(PRIVATE_KEY_PATH);
+    }
+    if (fs.existsSync(PUBLIC_KEY_PATH)) {
+      fs.unlinkSync(PUBLIC_KEY_PATH);
+    }
+
+    // Generate ED25519 key pair using ssh-keygen
+    await execAsync(`ssh-keygen -t ed25519 -f "${PRIVATE_KEY_PATH}" -N "" -C "vibe_in_vps_deploy_key"`);
+
+    // Set proper permissions
+    fs.chmodSync(PRIVATE_KEY_PATH, 0o600);
+    fs.chmodSync(PUBLIC_KEY_PATH, 0o644);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to generate SSH keys:', error.message);
+    return false;
+  }
+}
+
+function getSSHKeys() {
+  try {
+    const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
+    const publicKey = fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
+    return { privateKey, publicKey };
+  } catch (error) {
+    return null;
+  }
+}
+
+// Apply database configuration to docker-compose.yml
+function applyDatabaseConfig() {
+  const composePath = path.join(process.cwd(), 'deploy', 'docker-compose.yml');
+
+  try {
+    if (!fs.existsSync(composePath)) {
+      return; // File doesn't exist, skip
+    }
+
+    let content = fs.readFileSync(composePath, 'utf8');
+    const lines = content.split('\n');
+    const result = [];
+
+    let currentBlock = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      const trimmed = line.trim();
+
+      // Detect block markers
+      if (trimmed === '# [POSTGRES_START]') {
+        currentBlock = 'postgres';
+      } else if (trimmed === '# [POSTGRES_END]') {
+        currentBlock = null;
+      } else if (trimmed === '# [MYSQL_START]') {
+        currentBlock = 'mysql';
+      } else if (trimmed === '# [MYSQL_END]') {
+        currentBlock = null;
+      } else if (trimmed === '# [REDIS_START]') {
+        currentBlock = 'redis';
+      } else if (trimmed === '# [REDIS_END]') {
+        currentBlock = null;
+      } else if (trimmed === '# [DB_ENV_START] - Auto-managed by setup wizard') {
+        currentBlock = 'env';
+      } else if (trimmed === '# [DB_ENV_END]') {
+        currentBlock = null;
+      } else if (trimmed === '# [DB_DEPENDS_START] - Auto-managed by setup wizard') {
+        currentBlock = 'depends';
+      } else if (trimmed === '# [DB_DEPENDS_END]') {
+        currentBlock = null;
+      } else if (trimmed === '# [DB_VOLUMES_START] - Auto-managed by setup wizard') {
+        currentBlock = 'volumes';
+      } else if (trimmed === '# [DB_VOLUMES_END]') {
+        currentBlock = null;
+      }
+
+      // Uncomment or comment lines in database blocks
+      const isMarkerLine = trimmed.includes('[POSTGRES_') || trimmed.includes('[MYSQL_') || trimmed.includes('[REDIS_');
+
+      if (currentBlock === 'postgres' && !isMarkerLine && line.startsWith('  #')) {
+        if (config.databases.postgresql) {
+          line = line.replace(/^  # /, '  ');
+        }
+      } else if (currentBlock === 'postgres' && !isMarkerLine && line.startsWith('  ') && !line.startsWith('  #')) {
+        if (!config.databases.postgresql && trimmed) {
+          line = line.replace(/^  /, '  # ');
+        }
+      }
+
+      if (currentBlock === 'mysql' && !isMarkerLine && line.startsWith('  #')) {
+        if (config.databases.mysql) {
+          line = line.replace(/^  # /, '  ');
+        }
+      } else if (currentBlock === 'mysql' && !isMarkerLine && line.startsWith('  ') && !line.startsWith('  #')) {
+        if (!config.databases.mysql && trimmed) {
+          line = line.replace(/^  /, '  # ');
+        }
+      }
+
+      if (currentBlock === 'redis' && !isMarkerLine && line.startsWith('  #')) {
+        if (config.databases.redis) {
+          line = line.replace(/^  # /, '  ');
+        }
+      } else if (currentBlock === 'redis' && !isMarkerLine && line.startsWith('  ') && !line.startsWith('  #')) {
+        if (!config.databases.redis && trimmed) {
+          line = line.replace(/^  /, '  # ');
+        }
+      }
+
+      // Handle environment variables
+      if (currentBlock === 'env') {
+        if (trimmed.includes('DATABASE_URL=')) {
+          if (config.databases.postgresql && line.match(/^\s*#/)) {
+            line = line.replace(/^(\s*)# /, '$1');
+          } else if (!config.databases.postgresql && !line.match(/^\s*#/) && line.includes('DATABASE_URL')) {
+            line = line.replace(/^(\s*)/, '$1# ');
+          }
+        } else if (trimmed.includes('MYSQL_URL=')) {
+          if (config.databases.mysql && line.match(/^\s*#/)) {
+            line = line.replace(/^(\s*)# /, '$1');
+          } else if (!config.databases.mysql && !line.match(/^\s*#/) && line.includes('MYSQL_URL')) {
+            line = line.replace(/^(\s*)/, '$1# ');
+          }
+        } else if (trimmed.includes('REDIS_URL=')) {
+          if (config.databases.redis && line.match(/^\s*#/)) {
+            line = line.replace(/^(\s*)# /, '$1');
+          } else if (!config.databases.redis && !line.match(/^\s*#/) && line.includes('REDIS_URL')) {
+            line = line.replace(/^(\s*)/, '$1# ');
+          }
+        }
+      }
+
+      // Handle depends_on
+      if (currentBlock === 'depends') {
+        const hasAnyDb = config.databases.postgresql || config.databases.mysql || config.databases.redis;
+
+        if (trimmed === '# depends_on:' || trimmed === 'depends_on:') {
+          if (hasAnyDb && line.match(/^\s*#/)) {
+            line = line.replace(/^(\s*)# /, '$1');
+          } else if (!hasAnyDb && !line.match(/^\s*#/)) {
+            line = line.replace(/^(\s*)/, '$1# ');
+          }
+        } else if (line.match(/^\s+#?\s*(postgres|mysql|redis):|condition:/)) {
+          const isPostgres = line.includes('postgres');
+          const isMysql = line.includes('mysql');
+          const isRedis = line.includes('redis');
+          const isCondition = trimmed.startsWith('condition:') || trimmed.startsWith('# condition:');
+
+          // Check if previous line indicates which DB this belongs to
+          let dbType = null;
+          if (isCondition && i > 0) {
+            if (lines[i-1].includes('postgres')) dbType = 'postgresql';
+            else if (lines[i-1].includes('mysql')) dbType = 'mysql';
+            else if (lines[i-1].includes('redis')) dbType = 'redis';
+          }
+
+          const shouldUncomment = (isPostgres && config.databases.postgresql) ||
+                                 (isMysql && config.databases.mysql) ||
+                                 (isRedis && config.databases.redis) ||
+                                 (isCondition && dbType && config.databases[dbType]);
+
+          if (shouldUncomment && line.match(/^\s*#/)) {
+            line = line.replace(/^(\s*)# /, '$1');
+          } else if (!shouldUncomment && !line.match(/^\s*#/) && trimmed) {
+            line = line.replace(/^(\s*)/, '$1# ');
+          }
+        }
+      }
+
+      // Handle volumes
+      if (currentBlock === 'volumes') {
+        const hasAnyDb = config.databases.postgresql || config.databases.mysql || config.databases.redis;
+
+        if (trimmed === '# volumes:' || trimmed === 'volumes:') {
+          if (hasAnyDb && line.startsWith('#')) {
+            line = line.replace(/^# /, '');
+          } else if (!hasAnyDb && !line.startsWith('#')) {
+            line = line.replace(/^/, '# ');
+          }
+        } else if (trimmed.includes('postgres-data:')) {
+          if (config.databases.postgresql && line.startsWith('#')) {
+            line = line.replace(/^# /, '');
+          } else if (!config.databases.postgresql && !line.startsWith('#') && trimmed) {
+            line = line.replace(/^/, '# ');
+          }
+        } else if (trimmed.includes('mysql-data:')) {
+          if (config.databases.mysql && line.startsWith('#')) {
+            line = line.replace(/^# /, '');
+          } else if (!config.databases.mysql && !line.startsWith('#') && trimmed) {
+            line = line.replace(/^/, '# ');
+          }
+        } else if (trimmed.includes('redis-data:')) {
+          if (config.databases.redis && line.startsWith('#')) {
+            line = line.replace(/^# /, '');
+          } else if (!config.databases.redis && !line.startsWith('#') && trimmed) {
+            line = line.replace(/^/, '# ');
+          }
+        }
+      }
+
+      result.push(line);
+    }
+
+    // Write back to file
+    fs.writeFileSync(composePath, result.join('\n'), 'utf8');
+  } catch (error) {
+    console.error('Warning: Could not update docker-compose.yml:', error.message);
+  }
+}
 
 // ANSI color codes
 const colors = {
@@ -90,33 +353,82 @@ ${colors.green}✓ Checkpoint:${colors.reset} All accounts created and verified
   },
   {
     title: 'Step 3: Generate SSH Keys',
-    content: `
+    content: () => {
+      const keysExist = sshKeysExist();
+
+      if (keysExist) {
+        const keys = getSSHKeys();
+        return `
+${colors.cyan}SSH keys found!${colors.reset}
+
+${colors.green}✓ SSH keys already exist in project directory${colors.reset}
+
+${colors.bright}Public key:${colors.reset}
+${colors.dim}${keys.publicKey.trim()}${colors.reset}
+
+${colors.bright}Private key location:${colors.reset} ${colors.dim}.ssh/id_ed25519${colors.reset}
+
+${colors.yellow}Keys:${colors.reset}
+  ${colors.green}[G]${colors.reset} Generate new keys (overwrites existing)
+  ${colors.blue}[V]${colors.reset} View keys again
+
+${colors.dim}Tip: These keys are auto-managed and will be used in Step 7${colors.reset}
+`;
+      } else {
+        return `
 ${colors.cyan}Create SSH keys for secure server access${colors.reset}
 
-${colors.bright}Check if you already have SSH keys:${colors.reset}
+${colors.yellow}Option 1: Automatic Generation (Recommended)${colors.reset}
+  ${colors.green}Press [G] to generate keys automatically${colors.reset}
+  • Keys saved to project directory (.ssh/)
+  • Automatically used in later steps
+  • Added to .gitignore for security
 
-  ls ~/.ssh/id_ed25519*
+${colors.yellow}Option 2: Manual Generation${colors.reset}
+  Run this command in your terminal:
 
-${colors.bright}If files exist:${colors.reset} Skip to Step 4
-${colors.bright}If no files:${colors.reset} Generate new keys:
+  ${colors.dim}ssh-keygen -t ed25519 -C "your_email@example.com"${colors.reset}
 
-  ssh-keygen -t ed25519 -C "your_email@example.com"
-
-${colors.yellow}During generation:${colors.reset}
   • Press Enter to accept default location
-  • ${colors.bright}Leave passphrase empty${colors.reset} (just press Enter twice)
+  • ${colors.bright}Leave passphrase empty${colors.reset} (press Enter twice)
 
 ${colors.bright}View your public key:${colors.reset}
+  ${colors.dim}cat ~/.ssh/id_ed25519.pub${colors.reset}
 
-  cat ~/.ssh/id_ed25519.pub
+${colors.green}✓ Checkpoint:${colors.reset} SSH keys generated
 
-${colors.green}✓ Checkpoint:${colors.reset} SSH keys generated and displayed
+${colors.dim}Note: Keep your private key secret!${colors.reset}
+`;
+      }
+    },
+  },
+  {
+    title: 'Step 4: Optional Database Selection',
+    content: () => `
+${colors.cyan}Select databases you want to include (optional)${colors.reset}
 
-${colors.dim}Note: Keep your private key secret! Never share id_ed25519 (without .pub)${colors.reset}
+Toggle databases on/off using the keys below. All are ${colors.bright}optional${colors.reset}.
+
+${getDatabaseSelectionDisplay()}
+
+${colors.bright}What happens when you toggle:${colors.reset}
+  • ${colors.green}✓${colors.reset} Automatically uncomments services in docker-compose.yml
+  • ${colors.green}✓${colors.reset} Enables database connection strings
+  • ${colors.green}✓${colors.reset} Configures health checks and dependencies
+
+${colors.bright}About Database Support:${colors.reset}
+  • Databases run in Docker containers on your VPS
+  • Connected via internal network (secure, no external ports)
+  • Includes automatic backup scripts
+
+${colors.yellow}Keys:${colors.reset}
+  ${colors.green}[1]${colors.reset} Toggle PostgreSQL  ${colors.green}[2]${colors.reset} Toggle MySQL  ${colors.green}[3]${colors.reset} Toggle Redis
+
+${colors.dim}Tip: You can change this later by re-running the wizard${colors.reset}
     `,
   },
   {
-    title: 'Step 4: Get API Tokens',
+    title: 'Step 5: Get API Tokens',
     content: `
 ${colors.cyan}Collect API tokens from each service${colors.reset}
 
@@ -139,8 +451,36 @@ ${colors.green}✓ Checkpoint:${colors.reset} API tokens copied and ready to pas
     `,
   },
   {
-    title: 'Step 5: Configure GitHub Secrets',
-    content: `
+    title: 'Step 6: Configure GitHub Secrets',
+    content: () => {
+      const keys = sshKeysExist() ? getSSHKeys() : null;
+
+      let sshInstructions = '';
+      if (keys) {
+        sshInstructions = `
+${colors.yellow}SSH_PUBLIC_KEY${colors.reset}
+  ${colors.green}✓ Auto-generated${colors.reset} - Copy this value:
+  ${colors.dim}${keys.publicKey.trim()}${colors.reset}
+
+${colors.yellow}SSH_PRIVATE_KEY${colors.reset}
+  ${colors.green}✓ Auto-generated${colors.reset} - Copy this ENTIRE value:
+  ${colors.dim}${keys.privateKey.split('\n').slice(0, 2).join('\n')}
+  ... (${keys.privateKey.split('\n').length} lines total)
+  ${keys.privateKey.split('\n').slice(-1)[0]}${colors.reset}
+  ${colors.yellow}⚠ Include ALL lines from BEGIN to END${colors.reset}
+`;
+      } else {
+        sshInstructions = `
+${colors.yellow}SSH_PUBLIC_KEY${colors.reset}
+  Paste output from: ${colors.dim}cat ~/.ssh/id_ed25519.pub${colors.reset}
+
+${colors.yellow}SSH_PRIVATE_KEY${colors.reset}
+  Paste ENTIRE output from: ${colors.dim}cat ~/.ssh/id_ed25519${colors.reset}
+  ${colors.dim}(Must include "-----BEGIN" and "-----END" lines)${colors.reset}
+`;
+      }
+
+      return `
 ${colors.cyan}Add secrets to your GitHub repository${colors.reset}
 
 ${colors.bright}Navigate to Secrets:${colors.reset}
@@ -153,13 +493,7 @@ ${colors.bright}Required Secrets (5):${colors.reset}
 ${colors.yellow}HETZNER_TOKEN${colors.reset}
   Paste your Hetzner API token
 
-${colors.yellow}SSH_PUBLIC_KEY${colors.reset}
-  Paste output from: cat ~/.ssh/id_ed25519.pub
-
-${colors.yellow}SSH_PRIVATE_KEY${colors.reset}
-  Paste ENTIRE output from: cat ~/.ssh/id_ed25519
-  ${colors.dim}(Must include "-----BEGIN" and "-----END" lines)${colors.reset}
-
+${sshInstructions}
 ${colors.yellow}VPS_USER${colors.reset}
   Type exactly: ${colors.bright}deploy${colors.reset}
 
@@ -167,11 +501,14 @@ ${colors.yellow}HEALTHCHECKS_API_KEY${colors.reset}
   Paste your healthchecks.io API key
   ${colors.dim}(or leave empty if not using monitoring)${colors.reset}
 
-${colors.green}✓ Checkpoint:${colors.reset} All 5 secrets added to GitHub
-    `,
+${getDatabaseSecretsContent()}
+
+${keys ? `${colors.yellow}Keys:${colors.reset}\n  ${colors.green}[K]${colors.reset} View full SSH keys for copying\n\n` : ''}${colors.green}✓ Checkpoint:${colors.reset} All secrets added to GitHub
+`;
+    },
   },
   {
-    title: 'Step 6: Run Infrastructure Workflow',
+    title: 'Step 7: Run Infrastructure Workflow',
     content: `
 ${colors.cyan}Provision your VPS using GitHub Actions${colors.reset}
 
@@ -199,7 +536,7 @@ ${colors.green}✓ Checkpoint:${colors.reset} Infrastructure provisioned success
     `,
   },
   {
-    title: 'Step 7: Add Deployment Secrets',
+    title: 'Step 8: Add Deployment Secrets',
     content: `
 ${colors.cyan}Configure secrets for automatic deployments${colors.reset}
 
@@ -221,7 +558,7 @@ ${colors.bright}Now automatic deployments will work!${colors.reset}
     `,
   },
   {
-    title: 'Step 8: Deploy Your Application',
+    title: 'Step 9: Deploy Your Application',
     content: `
 ${colors.cyan}Trigger your first deployment${colors.reset}
 
@@ -245,7 +582,7 @@ ${colors.green}✓ Checkpoint:${colors.reset} First deployment complete!
     `,
   },
   {
-    title: 'Step 9: Verify Your Deployment',
+    title: 'Step 10: Verify Your Deployment',
     content: `
 ${colors.cyan}Check that your app is running${colors.reset}
 
@@ -308,8 +645,65 @@ ${colors.bright}Happy deploying! 🚀${colors.reset}
   },
 ];
 
+// Load config on startup
+const config = loadConfig();
+
+// Helper: Get database selection display
+function getDatabaseSelectionDisplay() {
+  const dbs = config.databases;
+  const pg = dbs.postgresql ? `${colors.green}[✓] PostgreSQL${colors.reset}` : `${colors.dim}[ ] PostgreSQL${colors.reset}`;
+  const mysql = dbs.mysql ? `${colors.green}[✓] MySQL${colors.reset}` : `${colors.dim}[ ] MySQL${colors.reset}`;
+  const redis = dbs.redis ? `${colors.green}[✓] Redis${colors.reset}` : `${colors.dim}[ ] Redis${colors.reset}`;
+
+  return `
+${colors.bright}Current Selection:${colors.reset}
+  ${pg}     - Relational database (recommended for most apps)
+  ${mysql}         - Alternative relational database
+  ${redis}          - In-memory cache and message broker
+`;
+}
+
+// Helper: Get database secrets content
+function getDatabaseSecretsContent() {
+  const dbs = config.databases;
+  const hasAnyDatabase = dbs.postgresql || dbs.mysql || dbs.redis;
+
+  if (!hasAnyDatabase) {
+    return '';
+  }
+
+  let content = `\n${colors.bright}Database Secrets:${colors.reset} ${colors.dim}(Required if you selected databases)${colors.reset}\n`;
+
+  if (dbs.postgresql) {
+    content += `
+${colors.yellow}POSTGRES_PASSWORD${colors.reset}
+  Generate: ${colors.dim}openssl rand -base64 32${colors.reset}
+  Paste the generated password
+`;
+  }
+
+  if (dbs.mysql) {
+    content += `
+${colors.yellow}MYSQL_ROOT_PASSWORD${colors.reset}
+  Generate: ${colors.dim}openssl rand -base64 32${colors.reset}
+  Paste the generated password
+`;
+  }
+
+  if (dbs.redis) {
+    content += `
+${colors.yellow}REDIS_PASSWORD${colors.reset}
+  Generate: ${colors.dim}openssl rand -base64 32${colors.reset}
+  Paste the generated password
+`;
+  }
+
+  return content;
+}
+
 // State
 let currentStep = 0;
+let waitingForAnyKey = false;
 
 // Clear screen
 function clearScreen() {
@@ -322,12 +716,13 @@ function displayStep() {
 
   const step = steps[currentStep];
   const progress = `Step ${currentStep + 1} of ${steps.length}`;
+  const content = typeof step.content === 'function' ? step.content() : step.content;
 
   console.log(`${colors.dim}${'='.repeat(80)}${colors.reset}`);
   console.log(`${colors.bright}${step.title}${colors.reset}`);
   console.log(`${colors.dim}${progress}${colors.reset}`);
   console.log(`${colors.dim}${'='.repeat(80)}${colors.reset}`);
-  console.log(step.content);
+  console.log(content);
   console.log(`${colors.dim}${'─'.repeat(80)}${colors.reset}`);
 
   // Navigation hints
@@ -340,7 +735,89 @@ function displayStep() {
 }
 
 // Handle input
-function handleInput(key) {
+async function handleInput(key) {
+  // If we're waiting for any key press, return to step display
+  if (waitingForAnyKey) {
+    waitingForAnyKey = false;
+    displayStep();
+    return;
+  }
+
+  // SSH key generation (only on Step 3)
+  if (currentStep === 3) {
+    if (key.toLowerCase() === 'g') {
+      // Generate SSH keys
+      clearScreen();
+      console.log(`${colors.cyan}Generating SSH keys...${colors.reset}\n`);
+      const success = await generateSSHKeys();
+
+      if (success) {
+        const keys = getSSHKeys();
+        console.log(`${colors.green}✓ SSH keys generated successfully!${colors.reset}\n`);
+        console.log(`${colors.bright}Public key:${colors.reset}`);
+        console.log(`${colors.dim}${keys.publicKey}${colors.reset}`);
+        console.log(`${colors.bright}Private key:${colors.reset} ${colors.dim}.ssh/id_ed25519${colors.reset}\n`);
+        console.log(`${colors.yellow}These keys will be automatically used in Step 6${colors.reset}\n`);
+      } else {
+        console.log(`${colors.yellow}Failed to generate SSH keys. Please generate manually.${colors.reset}\n`);
+      }
+
+      console.log(`Press any key to continue...`);
+      waitingForAnyKey = true;
+      return; // Wait for next keypress
+    } else if (key.toLowerCase() === 'v' && sshKeysExist()) {
+      // View existing keys
+      const keys = getSSHKeys();
+      clearScreen();
+      console.log(`${colors.bright}SSH Keys${colors.reset}\n`);
+      console.log(`${colors.cyan}Public key:${colors.reset}`);
+      console.log(`${colors.dim}${keys.publicKey}${colors.reset}`);
+      console.log(`${colors.cyan}Private key location:${colors.reset} ${colors.dim}.ssh/id_ed25519${colors.reset}\n`);
+      console.log(`Press any key to continue...`);
+      waitingForAnyKey = true;
+      return;
+    }
+  }
+
+  // SSH key viewer (only on Step 6)
+  if (currentStep === 6 && key.toLowerCase() === 'k' && sshKeysExist()) {
+    const keys = getSSHKeys();
+    clearScreen();
+    console.log(`${colors.bright}SSH Keys for GitHub Secrets${colors.reset}\n`);
+    console.log(`${colors.cyan}SSH_PUBLIC_KEY:${colors.reset}`);
+    console.log(`${colors.dim}${keys.publicKey}${colors.reset}`);
+    console.log(`${colors.cyan}SSH_PRIVATE_KEY:${colors.reset}`);
+    console.log(`${colors.dim}${keys.privateKey}${colors.reset}`);
+    console.log(`${colors.yellow}Copy the entire content above for each secret${colors.reset}\n`);
+    console.log(`Press any key to continue...`);
+    waitingForAnyKey = true;
+    return;
+  }
+
+  // Database toggle keys (only on Step 4)
+  if (currentStep === 4) {
+    // Step 4 (index 4) is database selection
+    if (key === '1') {
+      config.databases.postgresql = !config.databases.postgresql;
+      saveConfig(config);
+      applyDatabaseConfig();
+      displayStep();
+      return;
+    } else if (key === '2') {
+      config.databases.mysql = !config.databases.mysql;
+      saveConfig(config);
+      applyDatabaseConfig();
+      displayStep();
+      return;
+    } else if (key === '3') {
+      config.databases.redis = !config.databases.redis;
+      saveConfig(config);
+      applyDatabaseConfig();
+      displayStep();
+      return;
+    }
+  }
+
   switch (key.toLowerCase()) {
     case 'n':
       if (currentStep < steps.length - 1) {
@@ -358,6 +835,10 @@ function handleInput(key) {
       console.log(`\n${colors.yellow}Setup wizard closed.${colors.reset}`);
       console.log(`${colors.dim}You can restart anytime with: npm run setup-wizard${colors.reset}\n`);
       process.exit(0);
+      break;
+    default:
+      // Re-display current step for any unhandled key (provides feedback)
+      displayStep();
       break;
   }
 }

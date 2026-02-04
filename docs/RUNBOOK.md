@@ -55,6 +55,151 @@ View deployment history: `Code → Environments → production`
 
 Dashboard: https://healthchecks.io/projects/
 
+## Database Operations
+
+### View Database Status
+
+```bash
+ssh deploy@YOUR_VPS_IP 'docker compose ps postgres mysql redis'
+```
+
+### Connect to Databases
+
+#### PostgreSQL
+```bash
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+docker compose exec postgres psql -U app -d app
+```
+
+Common commands:
+- `\dt` - List tables
+- `\d table_name` - Describe table
+- `\q` - Quit
+
+#### MySQL
+```bash
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+docker compose exec mysql mysql -u app -p
+```
+
+Common commands:
+- `SHOW TABLES;` - List tables
+- `DESCRIBE table_name;` - Describe table
+- `EXIT;` - Quit
+
+#### Redis
+```bash
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+docker compose exec redis redis-cli -a YOUR_PASSWORD
+```
+
+Common commands:
+- `KEYS *` - List all keys
+- `GET key` - Get value
+- `EXIT` - Quit
+
+### Database Logs
+
+```bash
+# PostgreSQL logs
+ssh deploy@YOUR_VPS_IP 'docker compose logs postgres'
+
+# MySQL logs
+ssh deploy@YOUR_VPS_IP 'docker compose logs mysql'
+
+# Redis logs
+ssh deploy@YOUR_VPS_IP 'docker compose logs redis'
+```
+
+### Database Restart
+
+```bash
+# Restart PostgreSQL
+ssh deploy@YOUR_VPS_IP 'docker compose restart postgres'
+
+# Restart MySQL
+ssh deploy@YOUR_VPS_IP 'docker compose restart mysql'
+
+# Restart Redis
+ssh deploy@YOUR_VPS_IP 'docker compose restart redis'
+```
+
+### Storage Space
+
+Check database volume usage:
+```bash
+ssh deploy@YOUR_VPS_IP 'docker system df -v'
+```
+
+### Database Backups
+
+The backup script at `/opt/app/scripts/db-backup.sh` handles automated backups for all database types with 7-day retention.
+
+#### Run Manual Backup
+
+```bash
+ssh deploy@YOUR_VPS_IP 'cd /opt/app && ./scripts/db-backup.sh'
+```
+
+#### View Available Backups
+
+```bash
+ssh deploy@YOUR_VPS_IP 'ls -lh /opt/app/backups/'
+```
+
+#### Download Backups
+
+```bash
+# Download specific backup
+scp deploy@YOUR_VPS_IP:/opt/app/backups/postgres_20260204_120000.sql.gz ./
+
+# Download all backups
+scp -r deploy@YOUR_VPS_IP:/opt/app/backups/ ./local-backups/
+```
+
+#### Set Up Automated Daily Backups
+
+```bash
+# SSH to VPS and edit crontab
+ssh deploy@YOUR_VPS_IP
+crontab -e
+
+# Add this line for daily 2 AM backups
+0 2 * * * cd /opt/app && ./scripts/db-backup.sh >> /opt/app/backups/backup.log 2>&1
+```
+
+#### Restore Procedures
+
+**PostgreSQL:**
+```bash
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+docker compose stop app
+gunzip -c backups/postgres_TIMESTAMP.sql.gz | docker exec -i postgres psql -U app -d app
+docker compose start app
+```
+
+**MySQL:**
+```bash
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+docker compose stop app
+gunzip -c backups/mysql_TIMESTAMP.sql.gz | docker exec -i mysql mysql -u root -p"PASSWORD"
+docker compose start app
+```
+
+**Redis:**
+```bash
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+docker compose stop redis
+docker cp backups/redis_TIMESTAMP.rdb redis:/data/dump.rdb
+docker compose start redis
+```
+
 ## Common Issues
 
 ### Deployment Failed

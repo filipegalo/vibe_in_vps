@@ -178,6 +178,16 @@ Follow the [Complete Setup Guide](docs/SETUP.md) with screenshots and detailed e
 - **Real-Time Logs** - Stream logs directly from GitHub Actions
 - **Full History** - Complete deployment audit trail
 
+### Optional Databases
+
+- **PostgreSQL** - Production-ready relational database
+- **MySQL** - Alternative relational database
+- **Redis** - In-memory cache and message broker
+- **Interactive Setup** - Toggle databases on/off in setup wizard
+- **Auto-Configuration** - Automatically updates docker-compose.yml
+- **Secure by Default** - Internal network only, no external ports
+- **Automated Backups** - Built-in backup scripts with 7-day retention
+
 <br />
 
 ---
@@ -387,7 +397,7 @@ Trade-offs made for simplicity:
 ## Roadmap
 
 - [ ] Cloudflare integration for custom domains + SSL
-- [ ] Setup wizard for optional database (PostgreSQL, MySQL, Redis)
+- [x] Setup wizard for optional database (PostgreSQL, MySQL, Redis)
 - [ ] Cost monitoring in Terraform outputs
 - [ ] Multi-app support (multiple apps on same VPS)
 

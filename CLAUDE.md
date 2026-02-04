@@ -202,11 +202,11 @@ This project explicitly does NOT support:
   - Document DNS setup
 
 ### Medium Priority
-- [ ] **Setup Wizard**: Create interactive script for optional customizations
-  - Database (PostgreSQL, MySQL, Redis)
-  - Environment variable configuration
-  - Volume mount configuration
-  - Port mapping customization
+- [x] **Setup Wizard**: Create interactive script for optional customizations
+  - [x] Database (PostgreSQL, MySQL, Redis)
+  - [x] Environment variable configuration
+  - [ ] Volume mount configuration
+  - [ ] Port mapping customization
 
 ### Low Priority
 - [ ] **Cost Monitoring**: Add Terraform output showing estimated monthly cost
@@ -247,6 +247,23 @@ This project explicitly does NOT support:
 - **Rationale**: Allow users to restrict SSH to their IP, customize access control
 - **Implementation**: Variables for allowed IPs per port (SSH, HTTP, HTTPS)
 - **Default**: Open to all (0.0.0.0/0) for simplicity, users can lock down as needed
+
+### 2026-02-02: Optional Database Support
+- **Decided**: Implement database support via commented docker-compose services
+- **Rationale**: Users can opt-in by uncommenting, follows existing pattern (like volumes)
+- **Implementation**:
+  - Interactive setup wizard with database toggle (Step 4)
+  - Configuration persistence in `.setup-config.json`
+  - Complete docker-compose.yml sections for PostgreSQL 16, MySQL 8.0, Redis 7
+  - Database credentials passed via GitHub Secrets → SSH → `.env` file
+  - Databases run on internal Docker network only (no external ports)
+  - Health checks ensure databases start before app
+- **Trade-offs**:
+  - Rejected dynamic generation (too complex)
+  - Rejected Terraform-managed databases (cost increase $15+/month per DB)
+  - Chose manual uncomment over automatic (explicit is better than implicit)
+- **Documentation**: Complete sections in SETUP.md and RUNBOOK.md for operations
+- **Migration**: Existing users can adopt without changes, backward compatible
 
 ---
 

@@ -9,14 +9,16 @@ This guide walks you through deploying your first application using vibe_in_vps,
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Step 1: Fork Repository](#step-1-fork-repository)
-3. [Step 2: Create Accounts](#step-2-create-accounts)
-4. [Step 3: Generate SSH Keys](#step-3-generate-ssh-keys)
-5. [Step 4: Configure GitHub Secrets](#step-4-configure-github-secrets)
-6. [Step 5: Run Setup Workflow](#step-5-run-setup-workflow)
-7. [Step 6: Verify Deployment](#step-6-verify-deployment)
-8. [Step 7: Deploy Your Own App](#step-7-deploy-your-own-app)
-9. [Troubleshooting](#troubleshooting)
+2. [Interactive Setup Wizard](#interactive-setup-wizard)
+3. [Step 1: Fork Repository](#step-1-fork-repository)
+4. [Step 2: Create Accounts](#step-2-create-accounts)
+5. [Step 3: Generate SSH Keys](#step-3-generate-ssh-keys)
+6. [Step 4: Configure GitHub Secrets](#step-4-configure-github-secrets)
+7. [Step 5: Run Setup Workflow](#step-5-run-setup-workflow)
+8. [Step 6: Verify Deployment](#step-6-verify-deployment)
+9. [Step 7: Deploy Your Own App](#step-7-deploy-your-own-app)
+10. [Database Setup](#database-setup)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -30,6 +32,80 @@ Before you begin, you'll need:
 - **15 minutes** of your time
 
 **No installation required!** Everything runs in GitHub Actions.
+
+---
+
+## Interactive Setup Wizard
+
+The easiest way to set up vibe_in_vps is using the interactive setup wizard. It guides you through each step with clear instructions and handles SSH key generation and database configuration automatically.
+
+### Running the Wizard
+
+```bash
+npm run setup-wizard
+```
+
+### Navigation Keys
+
+The wizard uses keyboard navigation:
+
+| Key | Action |
+|-----|--------|
+| `N` | Move to **N**ext step |
+| `P` | Move to **P**revious step |
+| `Q` | **Q**uit the wizard |
+
+**Note**: Pressing any other key will refresh the current step display, keeping the wizard responsive.
+
+### Step-Specific Keys
+
+Different steps have additional commands:
+
+**Step 3 - SSH Keys:**
+
+| Key | Action |
+|-----|--------|
+| `G` | **G**enerate new SSH keys (saves to `.ssh/` directory) |
+| `V` | **V**iew existing SSH keys |
+
+When you generate or view keys, you'll see a "Press any key to continue" prompt. Any keypress returns you to the current step.
+
+If SSH keys already exist in the project directory, pressing `G` will regenerate them (the old keys are automatically deleted first to avoid interactive prompts).
+
+**Step 4 - Database Selection:**
+
+| Key | Action |
+|-----|--------|
+| `1` | Toggle **PostgreSQL** on/off |
+| `2` | Toggle **MySQL** on/off |
+| `3` | Toggle **Redis** on/off |
+
+Toggling a database automatically:
+- Updates `deploy/docker-compose.yml` (uncomments/comments the service)
+- Saves your selection to `.setup-config.json`
+- Configures environment variables and health check dependencies
+
+**Step 6 - GitHub Secrets:**
+
+| Key | Action |
+|-----|--------|
+| `K` | View full SSH **K**eys for copying to GitHub Secrets |
+
+### Configuration Persistence
+
+Your selections are saved to `.setup-config.json` in the project root. This file persists between wizard sessions, so you can:
+- Stop and resume the wizard later
+- Re-run the wizard to change database selections
+- Track what databases you've enabled
+
+### What the Wizard Does
+
+1. **Guides you through account creation** (GitHub, Hetzner, healthchecks.io)
+2. **Generates SSH keys** in the project's `.ssh/` directory
+3. **Lets you select databases** (PostgreSQL, MySQL, Redis)
+4. **Auto-manages docker-compose.yml** based on your database selections
+5. **Shows you exactly what secrets to add** to GitHub
+6. **Walks you through running workflows** and verifying deployment
 
 ---
 
@@ -116,6 +192,25 @@ If you don't have one:
 
 SSH keys are used to securely access your VPS.
 
+### Option A: Using the Setup Wizard (Recommended)
+
+If you're using the setup wizard (`npm run setup-wizard`), SSH key generation is built-in:
+
+1. Navigate to **Step 3: Generate SSH Keys**
+2. Press `G` to **G**enerate new SSH keys
+3. Keys are saved to the project's `.ssh/` directory
+4. Press `V` to **V**iew your keys anytime
+5. In **Step 6**, press `K` to view keys formatted for GitHub Secrets
+
+**Benefits of wizard-generated keys:**
+- Stored in project directory (not your home directory)
+- Automatically shown in Step 6 for easy copying
+- Can be regenerated anytime by pressing `G` (old keys are automatically deleted first)
+
+### Option B: Manual Generation
+
+If you prefer to generate keys manually:
+
 ### 3.1 Check for Existing Keys
 
 Open your terminal and run:
@@ -124,7 +219,7 @@ ls ~/.ssh/id_*.pub
 ```
 
 **If you see files** like `id_ed25519.pub` or `id_rsa.pub`:
-- ✅ You already have SSH keys! Skip to [Step 3.3](#33-copy-your-keys)
+- You already have SSH keys. Skip to [Step 3.3](#33-copy-your-keys)
 
 **If you see "No such file or directory"**:
 - Continue to Step 3.2 to generate new keys
@@ -157,7 +252,7 @@ The key fingerprint is:
 SHA256:xxx your-email@example.com
 ```
 
-✅ **Checkpoint**: You have SSH keys at `~/.ssh/id_ed25519` (private) and `~/.ssh/id_ed25519.pub` (public).
+**Checkpoint**: You have SSH keys at `~/.ssh/id_ed25519` (private) and `~/.ssh/id_ed25519.pub` (public).
 
 ### 3.3 Copy Your Keys
 
@@ -188,10 +283,10 @@ QyNTUxOQAAACCZd3SHrnTandAzETkOHxnW+2N3sQm7YH8vN9H5ZPmD2wAAAJhJVbfXSVW3
 ```
 
 **Important**:
-- ✅ Keep your **private key** secret - NEVER share it publicly
-- ✅ The **public key** is safe to share
+- Keep your **private key** secret - NEVER share it publicly
+- The **public key** is safe to share
 
-📋 **Keep your terminal open** - you'll copy these values in the next step.
+Keep your terminal open - you'll copy these values in the next step.
 
 ---
 
@@ -299,6 +394,43 @@ You should see 5 secrets listed:
 **Note**: After running the setup workflow in Step 5, you'll add 2 more secrets (`VPS_HOST` and `HEALTHCHECK_PING_URL`) for automatic deployments.
 
 ✅ **Checkpoint**: Initial secrets configured!
+
+### 4.6 Optional: Add Database Secrets
+
+If you plan to use databases (PostgreSQL, MySQL, or Redis), add these secrets now.
+
+#### Generate Database Passwords
+
+Run this command to generate a secure password:
+```bash
+openssl rand -base64 32
+```
+
+Run it once for each database you want to use.
+
+#### Add Database Secrets
+
+For **PostgreSQL**:
+1. Click **"New repository secret"**
+2. **Name**: `POSTGRES_PASSWORD`
+3. **Secret**: Paste your generated password
+4. Click **"Add secret"**
+
+For **MySQL**:
+1. Click **"New repository secret"**
+2. **Name**: `MYSQL_ROOT_PASSWORD`
+3. **Secret**: Paste your generated password
+4. Click **"Add secret"**
+
+For **Redis**:
+1. Click **"New repository secret"**
+2. **Name**: `REDIS_PASSWORD`
+3. **Secret**: Paste your generated password
+4. Click **"Add secret"**
+
+**Note**: The setup wizard automatically uncomments database services in `deploy/docker-compose.yml` based on your selections in Step 4. You only need to add the secrets here.
+
+See the [Database Setup](#database-setup) section for detailed instructions.
 
 ---
 
@@ -665,6 +797,42 @@ Set up billing alerts in Hetzner:
 3. Check "Destroy infrastructure"
 4. Click Run workflow
 
+### Issue: Setup Wizard Not Responding
+
+**Symptoms**: Pressing keys has no effect, or wizard appears frozen.
+
+**Fix**:
+1. Press `Ctrl+C` to exit the wizard
+2. Restart with `npm run setup-wizard`
+3. If the issue persists, ensure your terminal supports raw mode
+
+**Note**: The wizard is designed to stay responsive. Pressing any invalid key will simply refresh the current step display rather than doing nothing.
+
+### Issue: SSH Key Generation Fails in Wizard
+
+**Symptoms**: Pressing `G` shows an error about key generation.
+
+**Possible causes**:
+- `ssh-keygen` not installed (rare on macOS/Linux)
+- Permission issues with the `.ssh/` directory
+
+**Fix**:
+1. Generate keys manually (see [Step 3: Generate SSH Keys](#step-3-generate-ssh-keys))
+2. Or ensure `ssh-keygen` is in your PATH
+
+### Issue: Database Toggle Not Updating docker-compose.yml
+
+**Symptoms**: Toggling databases in Step 4 but `docker-compose.yml` unchanged.
+
+**Possible causes**:
+- Missing block markers in `docker-compose.yml`
+- File permission issues
+
+**Fix**:
+1. Check that `deploy/docker-compose.yml` contains the marker comments like `# [POSTGRES_START]`
+2. Verify you have write permissions to the file
+3. Manually uncomment the database services as described in [Manual Method](#2-manual-method-alternative)
+
 ### Getting More Help
 
 - **Documentation**: [README.md](../README.md)
@@ -674,14 +842,331 @@ Set up billing alerts in Hetzner:
 
 ---
 
+## Database Setup
+
+vibe_in_vps supports optional PostgreSQL, MySQL, and Redis databases running in Docker containers on your VPS.
+
+### When to Add Databases
+
+- **During initial setup**: Use the setup wizard or add database secrets in [Step 4.6](#46-optional-add-database-secrets)
+- **After deployment**: Re-run the wizard or manually edit `docker-compose.yml`
+
+### Step-by-Step: Enable a Database
+
+#### 1. Run Setup Wizard (Recommended)
+
+The easiest way to enable databases is through the interactive setup wizard:
+
+```bash
+npm run setup-wizard
+```
+
+Navigate to **Step 4: Optional Database Selection** using `N` (next) key, then:
+
+| Key | Database |
+|-----|----------|
+| `1` | Toggle **PostgreSQL** on/off |
+| `2` | Toggle **MySQL** on/off |
+| `3` | Toggle **Redis** on/off |
+
+Press the number key to toggle a database. A checkmark indicates the database is enabled.
+
+**What happens automatically when you toggle:**
+- Database services uncommented/commented in `deploy/docker-compose.yml`
+- Environment variables (DATABASE_URL, etc.) uncommented/commented
+- Health check dependencies configured
+- Volume persistence enabled/disabled
+- Configuration saved to `.setup-config.json`
+
+**Configuration persistence:**
+Your database selections are saved to `.setup-config.json`. You can:
+- Close the wizard and come back later - your selections are preserved
+- Re-run the wizard anytime to change database selections
+- View the file to see what's currently enabled
+
+Then proceed to **Step 6** in the wizard, which will show you exactly which database secrets you need to add based on your selections.
+
+#### 2. Manual Method (Alternative)
+
+If you prefer to enable databases manually:
+
+**Add GitHub Secrets:**
+
+See [Step 4.6](#46-optional-add-database-secrets) for instructions.
+
+Required secrets by database:
+- **PostgreSQL**: `POSTGRES_PASSWORD`
+- **MySQL**: `MYSQL_ROOT_PASSWORD`
+- **Redis**: `REDIS_PASSWORD`
+
+**Edit docker-compose.yml:**
+
+Open `deploy/docker-compose.yml` in your repository and:
+
+**For PostgreSQL:**
+```yaml
+# Uncomment the entire postgres service section
+postgres:
+  image: postgres:16-alpine
+  container_name: postgres
+  # ... rest of config
+```
+
+**For MySQL:**
+```yaml
+# Uncomment the entire mysql service section
+mysql:
+  image: mysql:8.0
+  container_name: mysql
+  # ... rest of config
+```
+
+**For Redis:**
+```yaml
+# Uncomment the entire redis service section
+redis:
+  image: redis:7-alpine
+  container_name: redis
+  # ... rest of config
+```
+
+#### 3. Enable Connection Strings
+
+In the same file, uncomment the relevant environment variables in the `app` service:
+
+```yaml
+services:
+  app:
+    environment:
+      # Uncomment the ones you need:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      - MYSQL_URL=mysql://${MYSQL_USER:-app}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-app}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+```
+
+#### 4. Enable Service Dependencies
+
+Uncomment the `depends_on` section to ensure databases start before your app:
+
+```yaml
+services:
+  app:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Add others as needed
+```
+
+#### 5. Enable Volume Persistence
+
+Uncomment the volumes at the bottom of the file:
+
+```yaml
+volumes:
+  postgres-data:
+  mysql-data:
+  redis-data:
+```
+
+#### 6. Deploy
+
+Commit and push your changes:
+
+```bash
+git add deploy/docker-compose.yml
+git commit -m "feat: enable database support"
+git push origin main
+```
+
+The deployment workflow will automatically start the database containers.
+
+### Connecting to Databases
+
+#### From Your Application
+
+Use the connection string environment variables:
+
+**PostgreSQL:**
+```javascript
+const DATABASE_URL = process.env.DATABASE_URL
+// postgresql://app:PASSWORD@postgres:5432/app
+```
+
+**MySQL:**
+```javascript
+const MYSQL_URL = process.env.MYSQL_URL
+// mysql://app:PASSWORD@mysql:3306/app
+```
+
+**Redis:**
+```javascript
+const REDIS_URL = process.env.REDIS_URL
+// redis://:PASSWORD@redis:6379
+```
+
+#### From SSH (Development/Debugging)
+
+SSH to your VPS:
+```bash
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+```
+
+**PostgreSQL:**
+```bash
+docker compose exec postgres psql -U app -d app
+```
+
+**MySQL:**
+```bash
+docker compose exec mysql mysql -u app -p
+```
+
+**Redis:**
+```bash
+docker compose exec redis redis-cli -a YOUR_PASSWORD
+```
+
+### Database Architecture
+
+- **Network**: All databases run on an internal Docker network (`app-network`)
+- **Ports**: No external ports exposed - only accessible from your app container
+- **Storage**: Persistent volumes ensure data survives container restarts
+- **Health checks**: Databases must be healthy before app starts
+- **Security**: Passwords passed via environment variables, never hardcoded
+
+---
+
+## Database Backup and Restore
+
+vibe_in_vps includes a built-in backup script (`deploy/scripts/db-backup.sh`) that handles PostgreSQL, MySQL, and Redis backups with automatic 7-day retention.
+
+### Running Manual Backups
+
+To run a backup manually, SSH to your VPS and execute the backup script:
+
+```bash
+ssh deploy@YOUR_VPS_IP 'cd /opt/app && ./scripts/db-backup.sh'
+```
+
+The script will:
+- Back up all running database containers (PostgreSQL, MySQL, Redis)
+- Create timestamped backup files in `/opt/app/backups/`
+- Automatically delete backups older than 7 days
+- Display a summary of all backups and disk usage
+
+### Backup File Locations
+
+Backups are stored in `/opt/app/backups/` with timestamped filenames:
+
+| Database | Backup Format | Example Filename |
+|----------|---------------|------------------|
+| PostgreSQL | Compressed SQL | `postgres_20260204_120000.sql.gz` |
+| MySQL | Compressed SQL | `mysql_20260204_120000.sql.gz` |
+| Redis | RDB snapshot | `redis_20260204_120000.rdb` |
+
+### Setting Up Automated Daily Backups
+
+To run backups automatically every day at 2:00 AM:
+
+```bash
+# SSH to your VPS
+ssh deploy@YOUR_VPS_IP
+
+# Edit crontab
+crontab -e
+
+# Add this line for daily backups at 2:00 AM
+0 2 * * * cd /opt/app && ./scripts/db-backup.sh >> /opt/app/backups/backup.log 2>&1
+```
+
+Save and exit. The cron job will run daily and append logs to `/opt/app/backups/backup.log`.
+
+### Viewing and Downloading Backups
+
+**List available backups:**
+```bash
+ssh deploy@YOUR_VPS_IP 'ls -lh /opt/app/backups/'
+```
+
+**Download a backup to your local machine:**
+```bash
+# Download a specific PostgreSQL backup
+scp deploy@YOUR_VPS_IP:/opt/app/backups/postgres_20260204_120000.sql.gz ./
+
+# Download all backups
+scp -r deploy@YOUR_VPS_IP:/opt/app/backups/ ./local-backups/
+```
+
+### Backup Retention Policy
+
+- **Retention period**: 7 days (configurable in `db-backup.sh`)
+- **Automatic cleanup**: Old backups are deleted after each backup run
+- **Manual cleanup**: Run `find /opt/app/backups -mtime +7 -delete` to remove old files
+
+### Restore Procedures
+
+#### Restore PostgreSQL
+
+```bash
+# SSH to your VPS
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+
+# Stop the app to prevent database writes during restore
+docker compose stop app
+
+# Restore from backup (replace filename with your backup)
+gunzip -c backups/postgres_20260204_120000.sql.gz | docker exec -i postgres psql -U app -d app
+
+# Restart the app
+docker compose start app
+```
+
+#### Restore MySQL
+
+```bash
+# SSH to your VPS
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+
+# Stop the app to prevent database writes during restore
+docker compose stop app
+
+# Restore from backup (replace filename and password)
+gunzip -c backups/mysql_20260204_120000.sql.gz | docker exec -i mysql mysql -u root -p"YOUR_PASSWORD"
+
+# Restart the app
+docker compose start app
+```
+
+#### Restore Redis
+
+```bash
+# SSH to your VPS
+ssh deploy@YOUR_VPS_IP
+cd /opt/app
+
+# Stop Redis
+docker compose stop redis
+
+# Copy the backup file into the Redis data volume
+docker cp backups/redis_20260204_120000.rdb redis:/data/dump.rdb
+
+# Restart Redis (it will load the dump.rdb on startup)
+docker compose start redis
+```
+
+---
+
 ## Next Steps
 
 After successful deployment:
 
-1. **Configure custom domain** (coming soon - Cloudflare integration)
-2. **Add environment variables**: SSH to VPS, edit `/opt/app/.env`
-3. **Set up monitoring alerts**: Configure healthchecks.io channels
-4. **Add database** (coming soon - setup wizard)
+1. **Add databases**: See [Database Setup](#database-setup) section
+2. **Configure custom domain** (coming soon - Cloudflare integration)
+3. **Add environment variables**: SSH to VPS, edit `/opt/app/.env`
+4. **Set up monitoring alerts**: Configure healthchecks.io channels
 
 ---
 

@@ -123,6 +123,23 @@ jobs:
 
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🗄️ Optional Database Secrets" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "If you're using databases, add these secrets (generate passwords with \`openssl rand -base64 32\`):" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**PostgreSQL:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`POSTGRES_PASSWORD\` - Database password" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**MySQL:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`MYSQL_ROOT_PASSWORD\` - Root password" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Redis:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`REDIS_PASSWORD\` - Redis password" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Then uncomment the database services in \`deploy/docker-compose.yml\` and redeploy." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "After adding these secrets, automatic deployments will work on push to main." >> $GITHUB_STEP_SUMMARY
 
   verify:

@@ -36,9 +36,9 @@ runcmd:
   - curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
   - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-  # Create deployment directory
-  - mkdir -p /opt/app
-  - chown deploy:deploy /opt/app
+  # Create deployment directories
+  - mkdir -p /opt/app /opt/app/scripts /opt/app/backups
+  - chown -R deploy:deploy /opt/app
 
   # Configure firewall
   - ufw --force enable
