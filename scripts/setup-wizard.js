@@ -827,8 +827,8 @@ async function handleInput(key) {
     }
   }
 
-  // SSH key viewer (only on Step 6)
-  if (currentStep === 6 && key.toLowerCase() === 'k' && sshKeysExist()) {
+  // SSH key viewer (only on Step 7)
+  if (currentStep === 7 && key.toLowerCase() === 'k' && sshKeysExist()) {
     const keys = getSSHKeys();
     clearScreen();
     console.log(`${colors.bright}SSH Keys for GitHub Secrets${colors.reset}\n`);
@@ -867,8 +867,8 @@ async function handleInput(key) {
   }
 
   // SSH access configuration (only on Step 5)
-  if (currentStep === 4) {
-    // Step 5 (index 4) is SSH access configuration
+  if (currentStep === 5) {
+    // Step 5 (index 5) is SSH access configuration
     if (key.toLowerCase() === 'e') {
       // Toggle direct SSH access
       config.ssh.enableDirectAccess = !config.ssh.enableDirectAccess;
