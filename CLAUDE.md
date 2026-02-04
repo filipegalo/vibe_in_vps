@@ -37,6 +37,61 @@ Hetzner VPS (Terraform-provisioned)
 
 ---
 
+## Secrets Flow Architecture
+
+GitHub Secrets are the single source of truth for sensitive configuration. They flow to application containers through a 6-step pipeline:
+
+```
+GitHub Secrets                     deploy.yml                      VPS Server
++---------------+    reads via     +---------------+    SSH with    +---------------+
+| POSTGRES_PASS | --------------> | ${{ secrets   | ------------> | export VAR=   |
+| API_KEY       |   ${{ secrets}} |   .VAR }}     |   env vars    | "value"       |
+| REDIS_PASS    |                 |               |               |               |
++---------------+                 +-------+-------+               +-------+-------+
+                                          |                               |
+                                          |                               v
+                                          |                       +---------------+
+                                          |                       | update.sh     |
+                                          |                       | writes to     |
+                                          |                       | /opt/app/.env |
+                                          |                       +-------+-------+
+                                          |                               |
+                                          v                               v
++---------------+                 +---------------+               +---------------+
+| Application   | <-------------- | docker-compose| <------------ | .env file     |
+| Container     |   env vars      | reads ${VAR}  |   loads       | VAR=value     |
+| process.env   |                 | from .env     |               |               |
++---------------+                 +---------------+               +---------------+
+```
+
+### Key Files in the Pipeline
+
+| File | Path | Role |
+|------|------|------|
+| GitHub Secrets | Repository Settings | Source of truth for sensitive values |
+| `deploy.yml` | `.github/workflows/deploy.yml` | Reads secrets, exports via SSH (lines 136-140) |
+| `update.sh` | `deploy/update.sh` | Writes secrets to `.env` file (lines 14-25) |
+| `docker-compose.yml` | `deploy/docker-compose.yml` | Substitutes `${VAR}` from `.env` |
+| `.env` | `/opt/app/.env` | Auto-generated runtime config |
+
+### Adding New Secrets
+
+To add a new secret, update these 4 locations:
+
+1. **GitHub Secrets**: Add the secret value
+2. **deploy.yml**: Add to `env:` block AND export in SSH heredoc
+3. **update.sh**: Add to the `cat > .env <<EOF` block
+4. **docker-compose.yml**: Add to service's `environment:` section
+
+### Important Behaviors
+
+- **`.env` is auto-generated**: Overwritten on every deployment by `update.sh`
+- **Variables must flow through all 4 files**: Missing any step results in undefined values
+- **Default values**: Use `${VAR:-default}` syntax in `update.sh` and `docker-compose.yml`
+- **Security**: Secrets are never logged; `.env` has restricted permissions
+
+---
+
 ## Architecture Decisions
 
 | Decision | Choice | Rationale |

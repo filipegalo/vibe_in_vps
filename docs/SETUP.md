@@ -436,6 +436,258 @@ For **Redis**:
 
 See the [Database Setup](#database-setup) section for detailed instructions.
 
+### 4.7 How Secrets Flow to Your Application
+
+Understanding how GitHub Secrets reach your application containers is essential for debugging configuration issues and adding new variables. This section explains the complete 6-step pipeline that moves secrets from GitHub to your running container.
+
+#### The Secrets Pipeline Overview
+
+```
++---------------------------+
+|     GITHUB SECRETS        |  Step 1: You add secrets here
+|   (Repository Settings)   |  Example: POSTGRES_PASSWORD = "mySecurePass123"
++-------------+-------------+
+              |
+              | ${{ secrets.POSTGRES_PASSWORD }}
+              v
++---------------------------+
+|   GITHUB ACTIONS WORKFLOW |  Step 2: deploy.yml reads secrets
+| (.github/workflows/       |  and makes them available as
+|  deploy.yml)              |  environment variables
++-------------+-------------+
+              |
+              | SSH connection with exported env vars
+              | export POSTGRES_PASSWORD="mySecurePass123"
+              v
++---------------------------+
+|       VPS SERVER          |  Step 3: SSH session receives
+|   (via SSH connection)    |  variables as shell environment
++-------------+-------------+
+              |
+              | ./update.sh script runs
+              v
++---------------------------+
+|      update.sh SCRIPT     |  Step 4: Script writes variables
+|   (deploy/update.sh)      |  to /opt/app/.env file
++-------------+-------------+
+              |
+              | docker compose reads .env
+              v
++---------------------------+
+|    docker-compose.yml     |  Step 5: Compose substitutes
+| (deploy/docker-compose.yml)|  ${VARIABLE} placeholders
++-------------+-------------+
+              |
+              | Container starts with env vars
+              v
++---------------------------+
+|   APPLICATION CONTAINER   |  Step 6: Your app accesses
+|   (process.env.VAR)       |  variables via process.env
++---------------------------+
+```
+
+#### Complete Code Walkthrough
+
+Let's trace exactly how `POSTGRES_PASSWORD` flows through each file:
+
+**Step 1: Add Secret in GitHub**
+
+Go to your repository on GitHub:
+```
+Settings > Secrets and variables > Actions > New repository secret
+
+Name:   POSTGRES_PASSWORD
+Value:  mySecurePass123
+```
+
+**Step 2: Workflow Reads the Secret**
+
+In `.github/workflows/deploy.yml`, the secret is read and passed to the SSH step:
+
+```yaml
+# deploy.yml lines 136-139
+- name: Deploy application
+  run: |
+    ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
+      # ... commands here ...
+    EOF
+  env:
+    POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}  # <-- Read from GitHub
+```
+
+The `env:` block makes the secret available as an environment variable within this step.
+
+**Step 3: SSH Exports the Variable**
+
+Inside the SSH heredoc (lines 117-135), the variable is exported:
+
+```yaml
+# deploy.yml lines 122-130
+ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
+  export GITHUB_REPOSITORY=${{ github.repository }}
+  export POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"  # <-- Exported to shell
+  # ... more exports ...
+
+  cd /opt/app
+  chmod +x update.sh
+  ./update.sh  # <-- Script runs with these vars in environment
+EOF
+```
+
+**Step 4: update.sh Writes to .env File**
+
+The `deploy/update.sh` script captures environment variables and writes them to `/opt/app/.env`:
+
+```bash
+# update.sh lines 14-25
+cat > .env <<EOF
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+POSTGRES_USER=${POSTGRES_USER:-app}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}           # <-- Written to .env
+POSTGRES_DB=${POSTGRES_DB:-app}
+# ... more variables ...
+EOF
+```
+
+After this runs, the `.env` file on the VPS contains:
+```
+GITHUB_REPOSITORY=youruser/yourrepo
+POSTGRES_USER=app
+POSTGRES_PASSWORD=mySecurePass123
+POSTGRES_DB=app
+```
+
+**Step 5: docker-compose.yml Reads from .env**
+
+Docker Compose automatically loads the `.env` file and substitutes variables:
+
+```yaml
+# docker-compose.yml lines 12-16
+services:
+  app:
+    environment:
+      # ${POSTGRES_PASSWORD} is replaced with "mySecurePass123"
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+```
+
+The resulting environment variable passed to the container:
+```
+DATABASE_URL=postgresql://app:mySecurePass123@postgres:5432/app
+```
+
+**Step 6: Application Accesses the Variable**
+
+Your application code reads the variable via standard environment access:
+
+```javascript
+// Node.js
+const dbUrl = process.env.DATABASE_URL
+// Result: "postgresql://app:mySecurePass123@postgres:5432/app"
+
+// Python
+import os
+db_url = os.environ.get('DATABASE_URL')
+```
+
+#### Adding Your Own Custom Secrets
+
+To add a new secret (e.g., `STRIPE_API_KEY`) that your application needs, you must update 4 files:
+
+**1. Add the secret in GitHub**
+
+```
+Settings > Secrets and variables > Actions > New repository secret
+
+Name:   STRIPE_API_KEY
+Value:  sk_live_xxxxxxxxxxxx
+```
+
+**2. Update `.github/workflows/deploy.yml`**
+
+Add to the `env:` section of the "Deploy application" step:
+
+```yaml
+- name: Deploy application
+  run: |
+    ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
+      export GITHUB_REPOSITORY=${{ github.repository }}
+      export STRIPE_API_KEY="${STRIPE_API_KEY}"     # <-- ADD THIS LINE
+      # ... existing exports ...
+
+      cd /opt/app
+      ./update.sh
+    EOF
+  env:
+    POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}  # <-- ADD THIS LINE
+```
+
+**3. Update `deploy/update.sh`**
+
+Add the variable to the `.env` file generation:
+
+```bash
+cat > .env <<EOF
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+STRIPE_API_KEY=${STRIPE_API_KEY:-}                  # <-- ADD THIS LINE
+EOF
+```
+
+**4. Update `deploy/docker-compose.yml`**
+
+Add to your app's environment section:
+
+```yaml
+services:
+  app:
+    environment:
+      - NODE_ENV=production
+      - STRIPE_API_KEY=${STRIPE_API_KEY}            # <-- ADD THIS LINE
+```
+
+**5. Access in your application**
+
+```javascript
+const stripeKey = process.env.STRIPE_API_KEY
+```
+
+#### Key Files in the Pipeline
+
+| File | Location | Role |
+|------|----------|------|
+| GitHub Secrets | Repository Settings | Secure storage for sensitive values |
+| `deploy.yml` | `.github/workflows/deploy.yml` | Reads secrets, exports via SSH |
+| `update.sh` | `deploy/update.sh` (copied to `/opt/app/`) | Writes secrets to `.env` file |
+| `docker-compose.yml` | `deploy/docker-compose.yml` (copied to `/opt/app/`) | Passes env vars to container |
+| `.env` | `/opt/app/.env` (auto-generated) | Runtime config file on VPS |
+
+#### Important Notes
+
+**The .env file is auto-generated on every deployment:**
+- The `update.sh` script overwrites `/opt/app/.env` each time
+- Manual edits to `.env` will be lost on next deployment
+- To persist changes, add them to GitHub Secrets and update the pipeline
+
+**Variables must be explicitly passed at each step:**
+- Forgetting any step will result in an empty or undefined variable
+- Use the 4-file checklist above when adding new secrets
+
+**Use default values for optional variables:**
+```bash
+# In update.sh - default to empty string if not set
+OPTIONAL_VAR=${OPTIONAL_VAR:-}
+
+# In docker-compose.yml - default to specific value
+- LOG_LEVEL=${LOG_LEVEL:-info}
+```
+
+**Security considerations:**
+- Secrets are never logged in GitHub Actions output
+- The `.env` file on the VPS has restricted permissions
+- Never commit secrets to git (`.env` is in `.gitignore`)
+- Use GitHub Secrets for all sensitive values (API keys, passwords, tokens)
+
 ---
 
 ## Step 5: Run Setup Workflow

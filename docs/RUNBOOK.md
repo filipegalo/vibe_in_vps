@@ -234,7 +234,105 @@ docker compose start redis
 
 ### Managing Environment Variables
 
-Your application can access environment variables defined in the `.env` file on the VPS. There are two methods to configure them:
+Your application can access environment variables defined in the `.env` file on the VPS.
+
+#### How Secrets Flow to Containers
+
+GitHub Secrets are automatically deployed to your application through a 6-step pipeline. Understanding this flow helps with debugging configuration issues.
+
+```
++---------------------------+
+|     GITHUB SECRETS        |  1. User adds secrets in GitHub UI
++-------------+-------------+
+              |
+              v
++---------------------------+
+|      deploy.yml           |  2. Workflow reads via ${{ secrets.VAR }}
++-------------+-------------+
+              |
+              v
++---------------------------+
+|   SSH to VPS              |  3. Variables exported to shell
++-------------+-------------+
+              |
+              v
++---------------------------+
+|      update.sh            |  4. Script writes to /opt/app/.env
++-------------+-------------+
+              |
+              v
++---------------------------+
+|   docker-compose.yml      |  5. Compose reads ${VAR} from .env
++-------------+-------------+
+              |
+              v
++---------------------------+
+|   Application Container   |  6. App accesses process.env.VAR
++---------------------------+
+```
+
+#### Pipeline Files Reference
+
+| Step | File | Location | What It Does |
+|------|------|----------|--------------|
+| 1 | GitHub Secrets | Repository Settings | Secure storage for sensitive values |
+| 2-3 | `deploy.yml` | `.github/workflows/deploy.yml` | Reads secrets, SSHs to VPS, exports variables |
+| 4 | `update.sh` | `/opt/app/update.sh` | Writes variables to `.env` file |
+| 5 | `docker-compose.yml` | `/opt/app/docker-compose.yml` | Substitutes `${VAR}` and passes to container |
+| 6 | `.env` | `/opt/app/.env` | Runtime config file (auto-generated) |
+
+#### Code Flow Example
+
+Tracing `POSTGRES_PASSWORD` through the pipeline:
+
+**deploy.yml (reads and exports):**
+```yaml
+env:
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+
+run: |
+  ssh deploy@${{ secrets.VPS_HOST }} << 'EOF'
+    export POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"
+    ./update.sh
+  EOF
+```
+
+**update.sh (writes to .env):**
+```bash
+cat > .env <<EOF
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+EOF
+```
+
+**docker-compose.yml (reads from .env):**
+```yaml
+environment:
+  - DATABASE_URL=postgresql://app:${POSTGRES_PASSWORD}@postgres:5432/app
+```
+
+**Your application:**
+```javascript
+const dbUrl = process.env.DATABASE_URL
+// Result: "postgresql://app:actualPassword@postgres:5432/app"
+```
+
+#### The .env File is Auto-Generated
+
+**Critical**: The `.env` file at `/opt/app/.env` is **overwritten on every deployment** by the `update.sh` script.
+
+- Manual edits to this file will be lost on next `git push`
+- To add persistent variables, update the deployment pipeline (see [SETUP.md](SETUP.md#47-how-secrets-flow-to-your-application))
+- The file is created with restricted permissions for security
+
+#### When to Use Each Method
+
+| Method | Use For | Persists Across Deploys |
+|--------|---------|-------------------------|
+| GitHub Secrets | API keys, passwords, tokens | Yes (recommended) |
+| Direct `.env` edit | Quick testing, debugging | No |
+| Hetzner Console edit | Emergency fixes | No |
+
+#### Two Methods to Configure Environment Variables
 
 #### Method 1: Via GitHub Secrets (Recommended for Secrets)
 
