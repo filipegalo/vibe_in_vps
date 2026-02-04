@@ -271,7 +271,6 @@ Alternatively, use GitHub Actions workflows or Hetzner Cloud Console. See docs/R
   - [ ] Port mapping customization
 
 ### Low Priority
-- [ ] **Cost Monitoring**: Add Terraform output showing estimated monthly cost
 - [ ] **Multi-app Support**: Allow multiple apps on same VPS (different ports)
 - [ ] **Backup Reminder**: Document manual backup procedures
 
