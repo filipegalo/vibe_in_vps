@@ -69,7 +69,7 @@ jobs:
 
       - name: Verify Setup Complete
         run: |
-          if [ -z "${{ secrets.VPS_HOST }}" ]; then
+          if [ -z "${{ steps.terraform_outputs.outputs.vps_host }}" ]; then
             echo "❌ ERROR: VPS not configured!"
             echo ""
             echo "This workflow requires initial setup to be completed first."
@@ -90,7 +90,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           environment: production
-          environment-url: ${{ secrets.CUSTOM_DOMAIN_URL || format('http://{0}', secrets.VPS_HOST) }}
+          environment-url: ${{ steps.terraform_outputs.outputs.custom_domain_url || format('http://{0}', steps.terraform_outputs.outputs.vps_host) }}
           ref: ${{ github.sha }}
 
       - name: Setup SSH
@@ -98,18 +98,49 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ steps.terraform_outputs.outputs.vps_host }} >> ~/.ssh/known_hosts
 
       - name: Copy deployment files to VPS
         run: |
-          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml deploy@${{ secrets.VPS_HOST }}:/opt/app/
-          scp -i ~/.ssh/deploy_key deploy/update.sh deploy@${{ secrets.VPS_HOST }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/docker-compose.yml deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/
+          scp -i ~/.ssh/deploy_key deploy/update.sh deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/
 
           # Copy backup script if it exists
           if [ -f deploy/scripts/db-backup.sh ]; then
-            ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} 'mkdir -p /opt/app/scripts'
-            scp -i ~/.ssh/deploy_key deploy/scripts/db-backup.sh deploy@${{ secrets.VPS_HOST }}:/opt/app/scripts/
-            ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} 'chmod +x /opt/app/scripts/db-backup.sh'
+            ssh -i ~/.ssh/deploy_key deploy@${{ steps.terraform_outputs.outputs.vps_host }} 'mkdir -p /opt/app/scripts'
+            scp -i ~/.ssh/deploy_key deploy/scripts/db-backup.sh deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/scripts/
+            ssh -i ~/.ssh/deploy_key deploy@${{ steps.terraform_outputs.outputs.vps_host }} 'chmod +x /opt/app/scripts/db-backup.sh'
+          fi
+
+      - name: Download infrastructure outputs
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: infrastructure.yml
+          name: terraform-state
+          path: ./terraform-state
+          if_no_artifact_found: warn
+
+      - name: Extract Terraform outputs
+        id: terraform_outputs
+        run: |
+          if [ -f ./terraform-state/terraform.tfstate ]; then
+            VPS_HOST=$(jq -r '.outputs.server_ip.value' ./terraform-state/terraform.tfstate)
+            CLOUDFLARE_TUNNEL_TOKEN=$(jq -r '.outputs.cloudflare_tunnel_token.value // ""' ./terraform-state/terraform.tfstate)
+            HEALTHCHECK_URL=$(jq -r '.outputs.healthcheck_ping_url.value // ""' ./terraform-state/terraform.tfstate)
+            CUSTOM_DOMAIN=$(jq -r '.outputs.custom_domain_url.value // ""' ./terraform-state/terraform.tfstate)
+
+            echo "vps_host=${VPS_HOST}" >> $GITHUB_OUTPUT
+            echo "cloudflare_tunnel_token=${CLOUDFLARE_TUNNEL_TOKEN}" >> $GITHUB_OUTPUT
+            echo "healthcheck_url=${HEALTHCHECK_URL}" >> $GITHUB_OUTPUT
+            echo "custom_domain_url=${CUSTOM_DOMAIN}" >> $GITHUB_OUTPUT
+            echo "✓ Extracted outputs from Terraform state"
+          else
+            echo "⚠️ No Terraform state found, using secrets (fallback)"
+            echo "vps_host=${{ steps.terraform_outputs.outputs.vps_host }}" >> $GITHUB_OUTPUT
+            echo "cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" >> $GITHUB_OUTPUT
+            echo "healthcheck_url=${{ steps.terraform_outputs.outputs.healthcheck_url }}" >> $GITHUB_OUTPUT
+            echo "custom_domain_url=${{ steps.terraform_outputs.outputs.custom_domain_url }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate environment configuration
@@ -121,44 +152,40 @@ jobs:
           GITHUB_ACTOR=${{ github.actor }}
 
           # Database Configuration
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-          POSTGRES_DB=${POSTGRES_DB}
-          MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-          MYSQL_USER=${MYSQL_USER}
-          MYSQL_PASSWORD=${MYSQL_PASSWORD}
-          MYSQL_DATABASE=${MYSQL_DATABASE}
-          REDIS_PASSWORD=${REDIS_PASSWORD}
+          POSTGRES_USER=${POSTGRES_USER:-app}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+          POSTGRES_DB=${POSTGRES_DB:-app}
+          MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-}
+          MYSQL_USER=${MYSQL_USER:-app}
+          MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
+          MYSQL_DATABASE=${MYSQL_DATABASE:-app}
+          REDIS_PASSWORD=${REDIS_PASSWORD:-}
 
           # Cloudflare Configuration
-          CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+          CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
           EOF
         env:
-          # Database defaults and secrets
-          POSTGRES_USER: app
+          # Database secrets (use secrets or empty)
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: app
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
-          MYSQL_USER: app
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-          MYSQL_DATABASE: app
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          # Cloudflare
-          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+          # Cloudflare (from terraform or secrets)
+          CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
 
       - name: Copy environment to VPS
         run: |
-          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no .env deploy@${{ secrets.VPS_HOST }}:/opt/app/.env
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no .env deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/.env
 
       - name: Deploy application
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@${{ secrets.VPS_HOST }} \
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@${{ steps.terraform_outputs.outputs.vps_host }} \
             'cd /opt/app && chmod +x update.sh && ./update.sh'
 
       - name: Ping healthcheck
         if: success()
         env:
-          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_PING_URL }}
+          HEALTHCHECK_URL: ${{ steps.terraform_outputs.outputs.healthcheck_url }}
         run: |
           if [ -n "$HEALTHCHECK_URL" ]; then
             curl -fsS --retry 3 "$HEALTHCHECK_URL" > /dev/null && echo "✓ healthchecks.io pinged"
@@ -168,7 +195,7 @@ jobs:
 
       - name: Verify deployment
         run: |
-          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh -i ~/.ssh/deploy_key deploy@${{ steps.terraform_outputs.outputs.vps_host }} << 'EOF'
             cd /opt/app
             docker compose ps
             docker compose logs --tail=50 app
@@ -181,7 +208,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           deployment-id: ${{ steps.deployment.outputs.deployment_id }}
           state: success
-          environment-url: ${{ secrets.CUSTOM_DOMAIN_URL || format('http://{0}', secrets.VPS_HOST) }}
+          environment-url: ${{ steps.terraform_outputs.outputs.custom_domain_url || format('http://{0}', steps.terraform_outputs.outputs.vps_host) }}
 
       - name: Update deployment status (failure)
         if: failure()
