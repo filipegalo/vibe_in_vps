@@ -27,17 +27,19 @@ output "healthcheck_ping_url" {
 output "app_url" {
   description = "URL to access your application"
   value       = local.cloudflare_enabled ? "https://${var.domain_name}" : "http://${hcloud_server.vps.ipv4_address}"
+  sensitive   = true
 }
 
 output "cloudflare_tunnel_token" {
   description = "Cloudflare Tunnel token for cloudflared daemon (add to GitHub Secrets) - empty if Cloudflare disabled"
-  value       = local.cloudflare_enabled ? cloudflare_tunnel.app[0].tunnel_token : ""
+  value       = local.cloudflare_enabled ? cloudflare_zero_trust_tunnel_cloudflared.app[0].tunnel_token : ""
   sensitive   = true
 }
 
 output "custom_domain_url" {
   description = "Custom domain URL with HTTPS - empty if Cloudflare disabled"
   value       = local.cloudflare_enabled ? "https://${var.domain_name}" : ""
+  sensitive   = true
 }
 
 output "github_secrets_summary" {
@@ -56,4 +58,5 @@ output "github_secrets_summary" {
   Then push to main branch to trigger deployment.
   ${local.cloudflare_enabled ? "\n  Don't forget to uncomment the cloudflared service in deploy/docker-compose.yml!" : ""}
   EOT
+  sensitive = true
 }

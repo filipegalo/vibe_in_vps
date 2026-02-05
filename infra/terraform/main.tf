@@ -125,7 +125,7 @@ resource "random_password" "tunnel_secret" {
 }
 
 # Create Cloudflare Tunnel
-resource "cloudflare_tunnel" "app" {
+resource "cloudflare_zero_trust_tunnel_cloudflared" "app" {
   count      = local.cloudflare_enabled ? 1 : 0
   account_id = data.cloudflare_accounts.main[0].accounts[0].id
   name       = "${var.project_name}-tunnel"
@@ -133,10 +133,10 @@ resource "cloudflare_tunnel" "app" {
 }
 
 # Configure Cloudflare Tunnel ingress rules
-resource "cloudflare_tunnel_config" "app" {
+resource "cloudflare_zero_trust_tunnel_cloudflared_config" "app" {
   count      = local.cloudflare_enabled ? 1 : 0
   account_id = data.cloudflare_accounts.main[0].accounts[0].id
-  tunnel_id  = cloudflare_tunnel.app[0].id
+  tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.app[0].id
 
   config {
     ingress_rule {
@@ -155,7 +155,7 @@ resource "cloudflare_record" "app" {
   count   = local.cloudflare_enabled ? 1 : 0
   zone_id = var.cloudflare_zone_id
   name    = var.domain_name
-  value   = "${cloudflare_tunnel.app[0].id}.cfargotunnel.com"
+  value   = "${cloudflare_zero_trust_tunnel_cloudflared.app[0].id}.cfargotunnel.com"
   type    = "CNAME"
   proxied = true
 }
