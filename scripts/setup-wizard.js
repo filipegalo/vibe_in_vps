@@ -593,7 +593,7 @@ ${colors.bright}What this provides:${colors.reset}
 ${colors.bright}Requirements:${colors.reset}
 • Cloudflare account (free tier works)
 • Domain registered and added to Cloudflare
-• Cloudflare API token with Zone:Read and DNS:Edit permissions
+• Cloudflare API token with: Account > Cloudflare Tunnel > Edit, Zone > DNS > Edit
 
 ${colors.bright}Current Configuration:${colors.reset}
   Custom Domain: ${config.cloudflare.enabled ? `${colors.green}Enabled${colors.reset}` : `${colors.dim}Disabled${colors.reset}`}

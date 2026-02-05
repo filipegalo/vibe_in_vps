@@ -2,29 +2,10 @@
 # Hetzner VPS + healthchecks.io monitoring
 #
 
-# Fetch GitHub Actions IP ranges
-data "http" "github_meta" {
-  url = "https://api.github.com/meta"
 
-  request_headers = {
-    Accept = "application/vnd.github+json"
-  }
-}
-
-# Parse GitHub Actions IP ranges from API response
 locals {
-  github_meta        = jsondecode(data.http.github_meta.response_body)
-  github_actions_ips = local.github_meta.actions
   # Cloudflare enabled check (same pattern as healthchecks.io)
   cloudflare_enabled = var.cloudflare_api_token != ""
-
-  # Hetzner firewall has max 50 IPs per rule, so we need to chunk the GitHub Actions IPs
-  # Split into chunks of 45 to leave room for additional_ssh_ips
-  chunk_size = 45
-  github_ip_chunks = [
-    for i in range(0, length(local.github_actions_ips), local.chunk_size) :
-    slice(local.github_actions_ips, i, min(i + local.chunk_size, length(local.github_actions_ips)))
-  ]
 }
 
 # SSH key resource
@@ -65,28 +46,14 @@ resource "hcloud_server" "vps" {
 resource "hcloud_firewall" "web" {
   name = "${var.server_name}-firewall"
 
-  # SSH access - GitHub Actions IPs (chunked to stay under 50 IP limit per rule)
-  # Multiple rules are created because GitHub Actions has 50+ IP ranges
-  dynamic "rule" {
-    for_each = local.github_ip_chunks
-    content {
-      direction  = "in"
-      protocol   = "tcp"
-      port       = "22"
-      source_ips = rule.value
-    }
-  }
-
-  # SSH access - additional user-provided IPs
-  # Only created if additional_ssh_ips is not empty
-  dynamic "rule" {
-    for_each = length(var.additional_ssh_ips) > 0 ? [1] : []
-    content {
-      direction  = "in"
-      protocol   = "tcp"
-      port       = "22"
-      source_ips = var.additional_ssh_ips
-    }
+  # SSH access - Restricted by IP if additional_ssh_ips is set, otherwise open to all
+  # Security relies primarily on SSH key authentication (password auth disabled)
+  # Note: Restricting to GitHub Actions IPs would require 10+ firewall rules (Hetzner limit)
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "22"
+    source_ips = length(var.additional_ssh_ips) > 0 ? var.additional_ssh_ips : ["0.0.0.0/0", "::/0"]
   }
 
   # HTTP access - customizable source IPs
