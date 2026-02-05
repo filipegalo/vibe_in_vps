@@ -231,11 +231,15 @@ This project explicitly does NOT support:
 - `CLOUDFLARE_ZONE_ID` - Cloudflare Zone ID (required if using custom domain)
 - `DOMAIN_NAME` - Custom domain name (required if using custom domain)
 
-### Auto-Generated GitHub Secrets (by infrastructure.yml workflow)
-- `VPS_HOST` - Server IP address (from Terraform output)
-- `HEALTHCHECK_PING_URL` - healthchecks.io ping URL (from Terraform output)
-- `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare Tunnel token (from Terraform output, if custom domain enabled)
-- `CUSTOM_DOMAIN_URL` - Custom domain HTTPS URL (from Terraform output, if custom domain enabled)
+### Auto-Extracted from Terraform State (No Manual Configuration Needed)
+
+The deploy workflow automatically downloads the Terraform state artifact and extracts:
+- `VPS_HOST` - Server IP address
+- `HEALTHCHECK_PING_URL` - healthchecks.io ping URL (if enabled)
+- `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare Tunnel token (if enabled)
+- `CUSTOM_DOMAIN_URL` - Custom domain HTTPS URL (if enabled)
+
+**No manual secret copying required!** After running the infrastructure workflow once, all subsequent deployments automatically discover these values.
 
 ### Runtime (VPS `.env` file)
 
