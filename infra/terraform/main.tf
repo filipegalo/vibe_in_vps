@@ -4,8 +4,8 @@
 
 
 locals {
-  # Cloudflare enabled check (same pattern as healthchecks.io)
-  cloudflare_enabled = var.cloudflare_api_token != ""
+  # Cloudflare enabled check - requires both API token AND domain name
+  cloudflare_enabled = var.cloudflare_api_token != "" && var.domain_name != ""
 }
 
 # SSH key resource
@@ -137,7 +137,7 @@ resource "cloudflare_record" "app" {
   count   = local.cloudflare_enabled ? 1 : 0
   zone_id = var.cloudflare_zone_id
   name    = var.domain_name
-  value   = "${cloudflare_zero_trust_tunnel_cloudflared.app[0].id}.cfargotunnel.com"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.app[0].id}.cfargotunnel.com"
   type    = "CNAME"
   proxied = true
 }
