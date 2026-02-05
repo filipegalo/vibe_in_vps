@@ -18,7 +18,8 @@ This guide walks you through deploying your first application using vibe_in_vps,
 8. [Step 6: Verify Deployment](#step-6-verify-deployment)
 9. [Step 7: Deploy Your Own App](#step-7-deploy-your-own-app)
 10. [Database Setup](#database-setup)
-11. [Troubleshooting](#troubleshooting)
+11. [Custom Domain + HTTPS Setup](#custom-domain--https-setup)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1370,6 +1371,228 @@ docker compose exec redis redis-cli -a YOUR_PASSWORD
 - **Storage**: Persistent volumes ensure data survives container restarts
 - **Health checks**: Databases must be healthy before app starts
 - **Security**: Passwords passed via environment variables, never hardcoded
+
+---
+
+## Custom Domain + HTTPS Setup
+
+vibe_in_vps supports optional Cloudflare Tunnel integration for custom domains with automatic HTTPS/SSL certificates.
+
+### Why Cloudflare Tunnel?
+
+- **Zero SSL configuration**: Automatic HTTPS certificates, no certbot needed
+- **No reverse proxy**: cloudflared handles routing, no nginx/Traefik complexity
+- **Secure**: Outbound-only connections from VPS (no inbound tunnel ports)
+- **Free tier**: Perfect for hobby projects
+- **CDN + DDoS protection**: Cloudflare's global network
+
+### Prerequisites
+
+Before enabling custom domain:
+
+1. **Cloudflare account**: Sign up at https://cloudflare.com (free tier works)
+2. **Domain registered**: Any domain registrar (Namecheap, GoDaddy, etc.)
+3. **Domain added to Cloudflare**: Follow Cloudflare's nameserver instructions
+
+### Step-by-Step: Enable Custom Domain
+
+#### 1. Run Setup Wizard (Recommended)
+
+The easiest way to enable custom domain is through the interactive setup wizard:
+
+```bash
+npm run setup-wizard
+```
+
+Navigate to **Step 6: Custom Domain + HTTPS (Optional)** using `N` (next) key, then:
+
+| Key | Action |
+|-----|--------|
+| `E` | Enable/Disable custom domain |
+| `C` | Configure domain settings (when enabled) |
+
+When you press `C`, the wizard will prompt you for:
+- **Domain name**: e.g., `app.example.com` or `example.com`
+- **Cloudflare API token**: With Zone:Read and DNS:Edit permissions
+- **Cloudflare Zone ID**: Found on your domain's overview page
+
+**What happens automatically when you enable:**
+- Configuration saved to `.setup-config.json`
+- Settings written to `infra/terraform/terraform.tfvars`
+- You'll see Cloudflare secrets in the GitHub Secrets step
+
+**Configuration persistence:**
+Your Cloudflare settings are saved to `.setup-config.json`. You can:
+- Close the wizard and come back later - your settings are preserved
+- Re-run the wizard anytime to change domain settings
+- View the file to see what's currently configured
+
+#### 2. Get Cloudflare Credentials
+
+**Create API Token:**
+
+1. Go to https://dash.cloudflare.com/profile/api-tokens
+2. Click "Create Token"
+3. Use "Edit zone DNS" template
+4. Select your zone/domain
+5. Copy the API token
+
+**Get Zone ID:**
+
+1. Go to Cloudflare dashboard
+2. Select your domain
+3. Scroll down to "API" section in right sidebar
+4. Copy the "Zone ID"
+
+#### 3. Add GitHub Secrets
+
+Add these secrets to your repository (Settings → Secrets and variables → Actions):
+
+| Secret Name | Value | Required |
+|-------------|-------|----------|
+| `CLOUDFLARE_API_TOKEN` | Your Cloudflare API token | Yes (if using custom domain) |
+| `CLOUDFLARE_ZONE_ID` | Your Cloudflare Zone ID | Yes (if using custom domain) |
+| `DOMAIN_NAME` | Your domain (e.g., app.example.com) | Yes (if using custom domain) |
+
+#### 4. Run Infrastructure Workflow
+
+After adding the secrets, re-run the "Provision Infrastructure" workflow:
+
+1. Go to Actions → "Provision Infrastructure"
+2. Click "Run workflow"
+3. Wait for completion (4-5 minutes)
+4. In the workflow summary, you'll see:
+   - `CLOUDFLARE_TUNNEL_TOKEN` - Copy this value
+   - `CUSTOM_DOMAIN_URL` - Your HTTPS URL
+
+#### 5. Add Deployment Secrets
+
+Add these additional secrets for automatic deployment:
+
+| Secret Name | Value | Required |
+|-------------|-------|----------|
+| `CLOUDFLARE_TUNNEL_TOKEN` | From workflow output | Yes (if using custom domain) |
+| `CUSTOM_DOMAIN_URL` | Your HTTPS URL (e.g., https://app.example.com) | Yes (if using custom domain) |
+
+#### 6. Uncomment cloudflared Service
+
+Edit `deploy/docker-compose.yml` in your repository:
+
+```yaml
+# Find this section and uncomment it:
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+    networks:
+      - app-network
+```
+
+Commit and push the changes:
+
+```bash
+git add deploy/docker-compose.yml
+git commit -m "Enable Cloudflare Tunnel for custom domain"
+git push origin main
+```
+
+#### 7. Verify Custom Domain
+
+After deployment completes (2-3 minutes):
+
+1. Open your custom domain in a browser: `https://your-domain.com`
+2. You should see your app with a valid SSL certificate
+3. Check the certificate details (lock icon in browser)
+
+**Troubleshooting:**
+- DNS propagation can take up to 24 hours, but usually completes in minutes
+- If domain doesn't work immediately, wait 5-10 minutes and try again
+- Verify DNS record in Cloudflare dashboard shows a CNAME pointing to `.cfargotunnel.com`
+- Check cloudflared container logs: `docker compose logs cloudflared`
+
+### Manual Method (Alternative)
+
+If you prefer to configure manually without the wizard:
+
+#### 1. Edit terraform.tfvars
+
+Add these lines to `infra/terraform/terraform.tfvars`:
+
+```hcl
+cloudflare_api_token = "your-api-token-here"
+cloudflare_zone_id   = "your-zone-id-here"
+domain_name          = "app.example.com"
+```
+
+#### 2. Add GitHub Secrets
+
+Follow step 3 above to add:
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ZONE_ID`
+- `DOMAIN_NAME`
+
+#### 3. Run Infrastructure Workflow
+
+Follow steps 4-7 above to complete the setup.
+
+### How It Works
+
+When you enable Cloudflare:
+
+1. **Terraform provisions**:
+   - Cloudflare Tunnel resource in your account
+   - DNS CNAME record pointing to the tunnel
+   - Tunnel configuration with ingress rules
+
+2. **GitHub Actions deploys**:
+   - `CLOUDFLARE_TUNNEL_TOKEN` passed to VPS via SSH
+   - Token written to `/opt/app/.env` file
+   - docker-compose starts cloudflared container
+
+3. **Cloudflared connects**:
+   - Establishes outbound connection to Cloudflare
+   - Routes HTTPS traffic from your domain to app container
+   - Automatic SSL certificate handling
+
+### Disabling Custom Domain
+
+To disable and revert to IP-only access:
+
+#### Via Wizard:
+
+1. Run `npm run setup-wizard`
+2. Navigate to Step 6
+3. Press `E` to disable
+4. Re-run "Provision Infrastructure" workflow to remove Cloudflare resources
+
+#### Manual:
+
+1. Comment out `cloudflared` service in `deploy/docker-compose.yml`
+2. Remove Cloudflare variables from `terraform.tfvars`
+3. Remove `CLOUDFLARE_*` and `CUSTOM_DOMAIN_URL` secrets from GitHub
+4. Re-run "Provision Infrastructure" workflow
+
+### Cost
+
+- **Cloudflare Tunnel**: Free (included in Cloudflare free tier)
+- **Cloudflare Free Plan**: $0/month
+- **Domain registration**: $10-15/year (varies by registrar and TLD)
+
+**Total additional cost**: $0/month (domain registration is one-time annual cost)
+
+### Security Notes
+
+- Cloudflare API token stored as GitHub Secret (never committed)
+- Tunnel token generated by Terraform (rotatable)
+- Outbound-only connections from VPS (no inbound tunnel ports)
+- Cloudflare handles SSL termination (automatic certificates)
+- Your origin server (VPS) can remain completely firewalled from public internet
 
 ---
 

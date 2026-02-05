@@ -11,6 +11,26 @@ variable "healthchecks_api_key" {
   default     = ""
 }
 
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token (optional - leave empty to disable custom domain)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for your domain (optional)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "domain_name" {
+  description = "Custom domain name (e.g., app.example.com) (optional)"
+  type        = string
+  default     = ""
+}
+
 variable "ssh_public_key" {
   description = "SSH public key for server access"
   type        = string

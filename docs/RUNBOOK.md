@@ -230,6 +230,212 @@ docker cp backups/redis_TIMESTAMP.rdb redis:/data/dump.rdb
 docker compose start redis
 ```
 
+---
+
+## Custom Domain Operations
+
+This section covers operations for managing Cloudflare Tunnel and custom domain configuration.
+
+### Checking Tunnel Status
+
+View cloudflared container status and logs:
+
+```bash
+# Check if cloudflared is running
+docker compose ps cloudflared
+
+# View tunnel logs
+docker compose logs cloudflared
+
+# Follow logs in real-time
+docker compose logs -f cloudflared
+
+# View last 100 lines
+docker compose logs --tail=100 cloudflared
+```
+
+**Healthy tunnel logs should show:**
+```
+cloudflared  | Registered tunnel connection
+cloudflared  | Connection established
+```
+
+### Verifying Domain Configuration
+
+#### Check DNS Record
+
+1. Go to Cloudflare dashboard → Your domain → DNS → Records
+2. Verify CNAME record exists pointing to `.cfargotunnel.com`
+3. Ensure "Proxied" (orange cloud) is enabled
+
+#### Test Domain Resolution
+
+```bash
+# Check DNS resolution
+dig your-domain.com
+
+# Check if tunnel is reachable
+curl -I https://your-domain.com
+
+# Test from different location (using external service)
+curl https://whatsmydns.net/#A/your-domain.com
+```
+
+### Restarting Cloudflare Tunnel
+
+If your custom domain stops working:
+
+```bash
+# Restart cloudflared container
+docker compose restart cloudflared
+
+# Or restart all services
+docker compose restart
+```
+
+### Rotating Tunnel Token
+
+If you need to rotate the tunnel token for security:
+
+1. Re-run "Provision Infrastructure" workflow in GitHub Actions
+2. Copy new `CLOUDFLARE_TUNNEL_TOKEN` from workflow output
+3. Update GitHub Secret: `CLOUDFLARE_TUNNEL_TOKEN`
+4. Trigger a new deployment (push to main)
+
+The old tunnel token will be automatically invalidated after the new one is active.
+
+### Troubleshooting Custom Domain
+
+#### Domain Not Resolving
+
+**Symptoms**: Domain doesn't load, DNS errors
+
+**Checks**:
+```bash
+# 1. Verify CLOUDFLARE_TUNNEL_TOKEN in .env
+cat /opt/app/.env | grep CLOUDFLARE_TUNNEL_TOKEN
+
+# 2. Check cloudflared container status
+docker compose ps cloudflared
+
+# 3. View cloudflared logs for errors
+docker compose logs cloudflared
+```
+
+**Solutions**:
+- Verify `CLOUDFLARE_TUNNEL_TOKEN` secret is set in GitHub
+- Check DNS record in Cloudflare dashboard
+- Wait 5-10 minutes for DNS propagation
+- Restart cloudflared: `docker compose restart cloudflared`
+
+#### SSL Certificate Issues
+
+**Symptoms**: Browser shows SSL warnings, certificate invalid
+
+**Checks**:
+- Verify domain is proxied (orange cloud) in Cloudflare DNS
+- Check SSL/TLS mode: Should be "Full" or "Flexible" (not "Off")
+- Visit domain in incognito/private mode to rule out cache issues
+
+**Solution**:
+1. Go to Cloudflare dashboard → SSL/TLS → Overview
+2. Set encryption mode to "Full" or "Flexible"
+3. Wait 1-2 minutes for SSL to provision
+4. Hard refresh browser (Ctrl+Shift+R or Cmd+Shift+R)
+
+#### Tunnel Connection Errors
+
+**Symptoms**: Logs show "connection refused" or "tunnel registration failed"
+
+**Checks**:
+```bash
+# Verify token is correct
+docker compose exec cloudflared cloudflared tunnel info
+
+# Check if tunnel exists in Cloudflare
+# (requires cloudflared CLI installed locally)
+cloudflared tunnel list
+```
+
+**Solutions**:
+- Verify `CLOUDFLARE_TUNNEL_TOKEN` secret matches Terraform output
+- Re-run infrastructure workflow to recreate tunnel
+- Check Cloudflare account for tunnel status
+
+#### App Works on IP But Not Domain
+
+**Symptoms**: `http://VPS_IP` works, but custom domain doesn't
+
+**Checks**:
+```bash
+# 1. Verify cloudflared is running
+docker compose ps cloudflared
+
+# 2. Check if tunnel is connected
+docker compose logs cloudflared | grep "Connection established"
+
+# 3. Test internal connectivity
+docker compose exec cloudflared wget -O- http://app:3000/health
+```
+
+**Solutions**:
+- Restart cloudflared: `docker compose restart cloudflared`
+- Verify `cloudflared` service is uncommented in docker-compose.yml
+- Check app service is running: `docker compose ps app`
+
+### Monitoring Custom Domain
+
+#### Set Up Uptime Monitoring
+
+Add your custom domain to healthchecks.io (if using monitoring):
+
+1. Go to healthchecks.io dashboard
+2. Edit existing check or create new one
+3. Change URL from `http://VPS_IP` to `https://your-domain.com`
+
+#### Check Domain Availability
+
+```bash
+# Quick availability check
+curl -f https://your-domain.com/health && echo "Domain is up" || echo "Domain is down"
+
+# Detailed response check
+curl -v https://your-domain.com
+```
+
+### Disabling Custom Domain
+
+To temporarily disable custom domain and use IP-only access:
+
+```bash
+# 1. Stop cloudflared
+docker compose stop cloudflared
+
+# 2. Remove from docker-compose (optional)
+# Comment out cloudflared service in docker-compose.yml
+
+# 3. Restart app
+docker compose up -d app
+```
+
+Your app will continue to be accessible via `http://VPS_IP`.
+
+To permanently remove:
+1. Comment out cloudflared service in `deploy/docker-compose.yml`
+2. Remove Cloudflare variables from `infra/terraform/terraform.tfvars`
+3. Remove Cloudflare secrets from GitHub
+4. Re-run "Provision Infrastructure" workflow to destroy Cloudflare resources
+
+### Custom Domain Best Practices
+
+1. **Monitor Both**: Set up monitoring for both IP and custom domain
+2. **DNS Backup**: Keep a note of your DNS configuration in case of issues
+3. **SSL Expiry**: Cloudflare handles SSL automatically, but verify cert is valid monthly
+4. **Log Review**: Check cloudflared logs weekly for connection issues
+5. **Token Security**: Treat `CLOUDFLARE_TUNNEL_TOKEN` as sensitive as passwords
+
+---
+
 ## Application Management
 
 ### Managing Environment Variables

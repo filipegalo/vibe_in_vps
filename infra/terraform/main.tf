@@ -17,6 +17,8 @@ locals {
   github_actions_ips = local.github_meta.actions
   # Combine GitHub Actions IPs with user-provided additional IPs
   all_ssh_ips        = concat(local.github_actions_ips, var.additional_ssh_ips)
+  # Cloudflare enabled check (same pattern as healthchecks.io)
+  cloudflare_enabled = var.cloudflare_api_token != ""
 }
 
 # SSH key resource
@@ -104,4 +106,56 @@ resource "healthchecksio_check" "app" {
 
   # Optional: Add more specific configuration
   desc = "Health check for ${var.github_repository} deployed on ${var.server_name}"
+}
+
+# ============================================
+# Cloudflare Tunnel (optional - custom domain + HTTPS)
+# ============================================
+
+# Fetch Cloudflare account details (only if Cloudflare is enabled)
+data "cloudflare_accounts" "main" {
+  count = local.cloudflare_enabled ? 1 : 0
+}
+
+# Generate random tunnel secret
+resource "random_password" "tunnel_secret" {
+  count   = local.cloudflare_enabled ? 1 : 0
+  length  = 64
+  special = false
+}
+
+# Create Cloudflare Tunnel
+resource "cloudflare_tunnel" "app" {
+  count      = local.cloudflare_enabled ? 1 : 0
+  account_id = data.cloudflare_accounts.main[0].accounts[0].id
+  name       = "${var.project_name}-tunnel"
+  secret     = base64encode(random_password.tunnel_secret[0].result)
+}
+
+# Configure Cloudflare Tunnel ingress rules
+resource "cloudflare_tunnel_config" "app" {
+  count      = local.cloudflare_enabled ? 1 : 0
+  account_id = data.cloudflare_accounts.main[0].accounts[0].id
+  tunnel_id  = cloudflare_tunnel.app[0].id
+
+  config {
+    ingress_rule {
+      hostname = var.domain_name
+      service  = "http://localhost:80"
+    }
+    # Catch-all rule (required)
+    ingress_rule {
+      service = "http_status:404"
+    }
+  }
+}
+
+# Create DNS record pointing to tunnel
+resource "cloudflare_record" "app" {
+  count   = local.cloudflare_enabled ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = var.domain_name
+  value   = "${cloudflare_tunnel.app[0].id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
 }

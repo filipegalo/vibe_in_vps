@@ -8,13 +8,14 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Secrets
+# Secrets (API tokens, keys)
 *.pem
 *.key
 .env
 .env.*
 !.env.example
 !terraform.tfvars.example
+terraform.tfvars.secret
 
 # OS
 .DS_Store

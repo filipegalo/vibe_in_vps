@@ -1,18 +1,26 @@
 # Copy this file to terraform.tfvars and fill in your values
-# NEVER commit terraform.tfvars to git!
+#
+# IMPORTANT: This file is SAFE TO COMMIT!
+# Sensitive values (API tokens, SSH keys) are passed via environment variables in GitHub Actions.
+# Only non-sensitive configuration (IPs, domain names, server settings) go here.
+#
+# See GitHub Secrets for sensitive values:
+# - HETZNER_TOKEN (not in this file)
+# - HEALTHCHECKS_API_KEY (not in this file)
+# - CLOUDFLARE_API_TOKEN (not in this file)
+# - SSH_PUBLIC_KEY (not in this file)
 
-# Required: Get from https://console.hetzner.cloud/
-hcloud_token = "your-hetzner-api-token-here"
+# ============================================
+# Non-Sensitive Configuration (Safe to commit)
+# ============================================
 
-# Optional: Get from https://healthchecks.io/ (leave empty to disable monitoring)
-healthchecks_api_key = ""
+# Your custom domain (public information - safe to commit)
+# Leave empty to disable custom domain
+domain_name = ""  # e.g., "app.example.com"
 
-# Required: Your SSH public key (from ~/.ssh/id_ed25519.pub or similar)
-# Example: ssh-ed25519 AAAA... your-email@example.com
-ssh_public_key = "ssh-ed25519 AAAA... your-email@example.com"
-
-# Required: Your GitHub repository (format: owner/repo)
-github_repository = "yourusername/vibe_in_vps"
+# Cloudflare Zone ID (not sensitive - just an identifier)
+# Leave empty if not using custom domain
+cloudflare_zone_id = ""
 
 # Optional: Customize these if needed
 # server_name = "my-app-server"

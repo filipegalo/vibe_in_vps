@@ -90,7 +90,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           environment: production
-          environment-url: http://${{ secrets.VPS_HOST }}
+          environment-url: ${{ secrets.CUSTOM_DOMAIN_URL || format('http://{0}', secrets.VPS_HOST) }}
           ref: ${{ github.sha }}
 
       - name: Setup SSH
@@ -129,6 +129,9 @@ jobs:
             export MYSQL_DATABASE="${MYSQL_DATABASE:-app}"
             export REDIS_PASSWORD="${REDIS_PASSWORD}"
 
+            # Export Cloudflare tunnel token if configured
+            export CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN}"
+
             cd /opt/app
             chmod +x update.sh
             ./update.sh
@@ -137,6 +140,7 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
 
       - name: Ping healthcheck
         if: success()
@@ -164,7 +168,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           deployment-id: ${{ steps.deployment.outputs.deployment_id }}
           state: success
-          environment-url: http://${{ secrets.VPS_HOST }}
+          environment-url: ${{ secrets.CUSTOM_DOMAIN_URL || format('http://{0}', secrets.VPS_HOST) }}
 
       - name: Update deployment status (failure)
         if: failure()

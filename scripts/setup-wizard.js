@@ -30,6 +30,12 @@ function loadConfig() {
       enableDirectAccess: false,
       userIp: '',
     },
+    cloudflare: {
+      enabled: false,
+      domainName: '',
+      apiToken: '',
+      zoneId: '',
+    },
   };
 
   try {
@@ -46,6 +52,10 @@ function loadConfig() {
         ssh: {
           ...defaultConfig.ssh,
           ...(loadedConfig.ssh || {}),
+        },
+        cloudflare: {
+          ...defaultConfig.cloudflare,
+          ...(loadedConfig.cloudflare || {}),
         },
       };
     }
@@ -109,6 +119,25 @@ function updateTerraformVars(config) {
       }
     }
 
+    // Handle Cloudflare configuration (non-sensitive values only)
+    // API token goes to GitHub Secrets, not terraform.tfvars
+    const cloudflareRegex = /^(cloudflare_zone_id|domain_name)\s*=\s*.*/gm;
+
+    if (config.cloudflare.enabled && config.cloudflare.domainName) {
+      // Remove existing Cloudflare lines
+      content = content.replace(cloudflareRegex, '');
+
+      // Add new Cloudflare configuration block (non-sensitive only)
+      if (!content.endsWith('\n')) content += '\n';
+      content += '\n# Cloudflare Configuration (configured via setup wizard)\n';
+      content += `# Note: CLOUDFLARE_API_TOKEN is in GitHub Secrets, not this file\n`;
+      content += `cloudflare_zone_id = "${config.cloudflare.zoneId}"\n`;
+      content += `domain_name        = "${config.cloudflare.domainName}"\n`;
+    } else {
+      // Remove Cloudflare lines if disabled
+      content = content.replace(cloudflareRegex, '');
+    }
+
     // Write back
     if (content) {
       fs.writeFileSync(tfvarsPath, content, 'utf8');
@@ -166,7 +195,7 @@ function getSSHKeys() {
   }
 }
 
-// Apply database configuration to docker-compose.yml
+// Apply database and Cloudflare configuration to docker-compose.yml
 function applyDatabaseConfig() {
   const composePath = path.join(process.cwd(), 'deploy', 'docker-compose.yml');
 
@@ -198,6 +227,10 @@ function applyDatabaseConfig() {
         currentBlock = 'redis';
       } else if (trimmed === '# [REDIS_END]') {
         currentBlock = null;
+      } else if (trimmed === '# [CLOUDFLARE_START]') {
+        currentBlock = 'cloudflare';
+      } else if (trimmed === '# [CLOUDFLARE_END]') {
+        currentBlock = null;
       } else if (trimmed === '# [DB_ENV_START] - Auto-managed by setup wizard') {
         currentBlock = 'env';
       } else if (trimmed === '# [DB_ENV_END]') {
@@ -212,8 +245,8 @@ function applyDatabaseConfig() {
         currentBlock = null;
       }
 
-      // Uncomment or comment lines in database blocks
-      const isMarkerLine = trimmed.includes('[POSTGRES_') || trimmed.includes('[MYSQL_') || trimmed.includes('[REDIS_');
+      // Uncomment or comment lines in database and Cloudflare blocks
+      const isMarkerLine = trimmed.includes('[POSTGRES_') || trimmed.includes('[MYSQL_') || trimmed.includes('[REDIS_') || trimmed.includes('[CLOUDFLARE_');
 
       if (currentBlock === 'postgres' && !isMarkerLine && line.startsWith('  #')) {
         if (config.databases.postgresql) {
@@ -241,6 +274,17 @@ function applyDatabaseConfig() {
         }
       } else if (currentBlock === 'redis' && !isMarkerLine && line.startsWith('  ') && !line.startsWith('  #')) {
         if (!config.databases.redis && trimmed) {
+          line = line.replace(/^  /, '  # ');
+        }
+      }
+
+      // Cloudflare tunnel service
+      if (currentBlock === 'cloudflare' && !isMarkerLine && line.startsWith('  #')) {
+        if (config.cloudflare.enabled) {
+          line = line.replace(/^  # /, '  ');
+        }
+      } else if (currentBlock === 'cloudflare' && !isMarkerLine && line.startsWith('  ') && !line.startsWith('  #')) {
+        if (!config.cloudflare.enabled && trimmed) {
           line = line.replace(/^  /, '  # ');
         }
       }
@@ -372,6 +416,7 @@ ${colors.cyan}What you'll set up:${colors.reset}
   • Hetzner Cloud VPS
   • GitHub Actions CI/CD
   • Optional: healthchecks.io monitoring
+  • Optional: Custom domain with HTTPS
 
 ${colors.cyan}Time required:${colors.reset} 5-10 minutes
 
@@ -418,6 +463,11 @@ ${colors.bright}2. Hetzner Cloud Account${colors.reset} ${colors.yellow}(Require
 ${colors.bright}3. healthchecks.io Account${colors.reset} ${colors.dim}(Optional - for monitoring)${colors.reset}
    → https://healthchecks.io/
    → Free tier includes 20 checks
+
+${colors.bright}4. Cloudflare Account${colors.reset} ${colors.dim}(Optional - for custom domain + HTTPS)${colors.reset}
+   → https://cloudflare.com/
+   → Free tier works perfectly
+   → Add your domain and change nameservers
 
 ${colors.green}✓ Checkpoint:${colors.reset} All accounts created and verified
     `,
@@ -530,8 +580,55 @@ ${colors.bright}Recommendation:${colors.reset}
     `,
   },
   {
-    title: 'Step 6: Get API Tokens',
-    content: `
+    title: 'Step 6: Custom Domain + HTTPS (Optional)',
+    content: () => `
+${colors.cyan}Enable custom domain with automatic HTTPS${colors.reset}
+
+${colors.bright}What this provides:${colors.reset}
+• Custom domain (e.g., ${colors.blue}app.yourdomain.com${colors.reset})
+• Automatic HTTPS/SSL certificates
+• Cloudflare CDN and DDoS protection
+
+${colors.bright}Requirements:${colors.reset}
+• Cloudflare account (free tier works)
+• Domain registered and added to Cloudflare
+• Cloudflare API token with Zone:Read and DNS:Edit permissions
+
+${colors.bright}Current Configuration:${colors.reset}
+  Custom Domain: ${config.cloudflare.enabled ? `${colors.green}Enabled${colors.reset}` : `${colors.dim}Disabled${colors.reset}`}
+${config.cloudflare.domainName ? `  Domain: ${colors.cyan}${config.cloudflare.domainName}${colors.reset}` : ''}
+${config.cloudflare.enabled ? `  ${colors.dim}(Domain saved to terraform.tfvars, API token for GitHub Secrets)${colors.reset}` : ''}
+
+${colors.yellow}Keys:${colors.reset}
+  ${colors.green}[E]${colors.reset} Enable/Disable custom domain
+  ${colors.blue}[C]${colors.reset} Configure domain settings (when enabled)
+
+${colors.dim}Note: Wizard collects API token to display in Step 8 for GitHub Secrets.
+API token is NOT saved to terraform.tfvars (security).${colors.reset}
+
+${colors.bright}Recommendation:${colors.reset}
+  • ${colors.green}Enable${colors.reset} if you want professional HTTPS URLs
+  • ${colors.yellow}Skip${colors.reset} if IP address access is sufficient
+    `,
+  },
+  {
+    title: 'Step 7: Get API Tokens',
+    content: () => {
+      let cloudflareInstructions = '';
+      if (config.cloudflare.enabled) {
+        cloudflareInstructions = `
+${colors.bright}Cloudflare API Token${colors.reset} ${colors.dim}(Optional - for custom domain + HTTPS)${colors.reset}
+1. Go to: https://dash.cloudflare.com/profile/api-tokens
+2. Click "Create Token"
+3. Use "Edit zone DNS" template
+4. Select your zone/domain
+5. Copy the API token
+6. Zone ID: Found on domain overview page in Cloudflare dashboard
+
+`;
+      }
+
+      return `
 ${colors.cyan}Collect API tokens from each service${colors.reset}
 
 ${colors.bright}Hetzner API Token${colors.reset} ${colors.yellow}(Required)${colors.reset}
@@ -543,17 +640,18 @@ ${colors.bright}Hetzner API Token${colors.reset} ${colors.yellow}(Required)${col
 6. Permissions: ${colors.bright}Read & Write${colors.reset}
 7. Copy the token (you won't see it again!)
 
-${colors.bright}healthchecks.io API Key${colors.reset} ${colors.dim}(Optional)${colors.reset}
+${cloudflareInstructions}${colors.bright}healthchecks.io API Key${colors.reset} ${colors.dim}(Optional)${colors.reset}
 1. Go to: https://healthchecks.io/projects/
 2. Click your project
 3. Go to Settings → API Access
 4. Copy the API key
 
 ${colors.green}✓ Checkpoint:${colors.reset} API tokens copied and ready to paste
-    `,
+`;
+    },
   },
   {
-    title: 'Step 7: Configure GitHub Secrets',
+    title: 'Step 8: Configure GitHub Secrets',
     content: () => {
       const keys = sshKeysExist() ? getSSHKeys() : null;
 
@@ -582,6 +680,19 @@ ${colors.yellow}SSH_PRIVATE_KEY${colors.reset}
 `;
       }
 
+      let cloudflareSecrets = '';
+      if (config.cloudflare.enabled) {
+        cloudflareSecrets = `
+${colors.yellow}CLOUDFLARE_API_TOKEN${colors.reset} ${colors.dim}(Optional - for custom domain)${colors.reset}
+  ${config.cloudflare.apiToken ? `${colors.green}✓ From wizard${colors.reset} - Copy this value:\n  ${colors.dim}${config.cloudflare.apiToken}${colors.reset}` : 'Paste your Cloudflare API token'}
+  ${colors.dim}(or skip if not using custom domain)${colors.reset}
+
+${colors.dim}Note: API token is NOT saved to terraform.tfvars (security).
+Only goes to GitHub Secrets.${colors.reset}
+
+`;
+      }
+
       return `
 ${colors.cyan}Add secrets to your GitHub repository${colors.reset}
 
@@ -600,7 +711,7 @@ ${colors.yellow}HEALTHCHECKS_API_KEY${colors.reset}
   Paste your healthchecks.io API key
   ${colors.dim}(or leave empty if not using monitoring)${colors.reset}
 
-${getDatabaseSecretsContent()}
+${cloudflareSecrets}${getDatabaseSecretsContent()}
 
 ${colors.dim}Note: The SSH user is always "deploy" - automatically configured, no secret needed.${colors.reset}
 
@@ -609,7 +720,7 @@ ${keys ? `${colors.yellow}Keys:${colors.reset}\n  ${colors.green}[K]${colors.res
     },
   },
   {
-    title: 'Step 8: Run Infrastructure Workflow',
+    title: 'Step 9: Run Infrastructure Workflow',
     content: `
 ${colors.cyan}Provision your VPS using GitHub Actions${colors.reset}
 
@@ -637,8 +748,8 @@ ${colors.green}✓ Checkpoint:${colors.reset} Infrastructure provisioned success
     `,
   },
   {
-    title: 'Step 9: Add Deployment Secrets',
-    content: `
+    title: 'Step 10: Add Deployment Secrets',
+    content: () => `
 ${colors.cyan}Configure secrets for automatic deployments${colors.reset}
 
 ${colors.bright}Add the secrets displayed in the workflow summary:${colors.reset}
@@ -653,13 +764,13 @@ ${colors.yellow}HEALTHCHECK_PING_URL${colors.reset} ${colors.dim}(Optional)${col
   Paste the ping URL from workflow summary
   ${colors.dim}(or skip if not using monitoring)${colors.reset}
 
-${colors.green}✓ Checkpoint:${colors.reset} Deployment secrets configured
+${config.cloudflare.enabled ? `\n${colors.yellow}CLOUDFLARE_TUNNEL_TOKEN${colors.reset} ${colors.dim}(Optional - for custom domain)${colors.reset}\n  Paste the Cloudflare tunnel token from workflow summary\n  ${colors.dim}(or skip if not using custom domain)${colors.reset}\n\n${colors.yellow}CUSTOM_DOMAIN_URL${colors.reset} ${colors.dim}(Optional - for custom domain)${colors.reset}\n  Paste your custom domain URL (e.g., https://app.example.com)\n  ${colors.dim}(or skip if not using custom domain)${colors.reset}\n\n${colors.dim}Don't forget to uncomment the cloudflared service in deploy/docker-compose.yml!${colors.reset}\n\n` : ''}${colors.green}✓ Checkpoint:${colors.reset} Deployment secrets configured
 
 ${colors.bright}Now automatic deployments will work!${colors.reset}
     `,
   },
   {
-    title: 'Step 10: Deploy Your Application',
+    title: 'Step 11: Deploy Your Application',
     content: `
 ${colors.cyan}Trigger your first deployment${colors.reset}
 
@@ -683,12 +794,12 @@ ${colors.green}✓ Checkpoint:${colors.reset} First deployment complete!
     `,
   },
   {
-    title: 'Step 11: Verify Your Deployment',
-    content: `
+    title: 'Step 12: Verify Your Deployment',
+    content: () => `
 ${colors.cyan}Check that your app is running${colors.reset}
 
 ${colors.bright}Access your app:${colors.reset}
-Open in browser: ${colors.blue}http://YOUR_VPS_IP${colors.reset}
+Open in browser: ${config.cloudflare.enabled ? `${colors.blue}${config.cloudflare.domainName}${colors.reset} (HTTPS)\n  ${colors.dim}or ${colors.blue}http://YOUR_VPS_IP${colors.reset}` : `${colors.blue}http://YOUR_VPS_IP${colors.reset}`}
 
 ${colors.bright}You should see:${colors.reset}
   {
@@ -698,7 +809,7 @@ ${colors.bright}You should see:${colors.reset}
   }
 
 ${colors.bright}Check health endpoint:${colors.reset}
-  ${colors.blue}http://YOUR_VPS_IP/health${colors.reset}
+  ${config.cloudflare.enabled ? `${colors.blue}${config.cloudflare.domainName}/health${colors.reset}\n  ${colors.dim}or ${colors.blue}http://YOUR_VPS_IP/health${colors.reset}` : `${colors.blue}http://YOUR_VPS_IP/health${colors.reset}`}
 
 ${colors.bright}SSH to your server:${colors.reset}
   ssh deploy@YOUR_VPS_IP
@@ -880,8 +991,8 @@ async function handleInput(key) {
     }
   }
 
-  // SSH key viewer (only on Step 7)
-  if (currentStep === 7 && key.toLowerCase() === 'k' && sshKeysExist()) {
+  // SSH key viewer (only on Step 8)
+  if (currentStep === 8 && key.toLowerCase() === 'k' && sshKeysExist()) {
     const keys = getSSHKeys();
     clearScreen();
     console.log(`${colors.bright}SSH Keys for GitHub Secrets${colors.reset}\n`);
@@ -962,6 +1073,85 @@ async function handleInput(key) {
         setupReadline();
         displayStep();
       });
+      return;
+    }
+  }
+
+  // Cloudflare configuration (only on Step 6)
+  if (currentStep === 6) {
+    // Step 6 (index 6) is Cloudflare configuration
+    if (key.toLowerCase() === 'e') {
+      // Toggle Cloudflare
+      config.cloudflare.enabled = !config.cloudflare.enabled;
+      if (!config.cloudflare.enabled) {
+        // Clear Cloudflare settings when disabling
+        config.cloudflare.domainName = '';
+        config.cloudflare.apiToken = '';
+        config.cloudflare.zoneId = '';
+      }
+      saveConfig(config);
+      updateTerraformVars(config);
+      applyDatabaseConfig(); // Also handles Cloudflare service uncomment/comment
+      displayStep();
+      return;
+    } else if (key.toLowerCase() === 'c' && config.cloudflare.enabled) {
+      // Configure Cloudflare settings
+      clearScreen();
+      console.log(`${colors.bright}Cloudflare Configuration${colors.reset}\n`);
+      console.log(`${colors.yellow}We need three values from your Cloudflare account:${colors.reset}\n`);
+      console.log(`${colors.dim}Domain/Zone ID → terraform.tfvars (safe to commit)`);
+      console.log(`API Token → GitHub Secrets (kept secure)${colors.reset}\n`);
+
+      // Temporarily disable raw mode and remove keypress listeners
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false);
+      }
+      process.stdin.removeAllListeners('keypress');
+
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      rl.question('1. Domain name (e.g., app.example.com): ', (domain) => {
+        if (!domain.trim()) {
+          rl.close();
+          setupReadline();
+          displayStep();
+          return;
+        }
+
+        rl.question('2. Cloudflare API token: ', (apiToken) => {
+          if (!apiToken.trim()) {
+            rl.close();
+            setupReadline();
+            displayStep();
+            return;
+          }
+
+          rl.question('3. Cloudflare Zone ID: ', (zoneId) => {
+            rl.close();
+
+            if (zoneId.trim()) {
+              config.cloudflare.domainName = domain.trim();
+              config.cloudflare.apiToken = apiToken.trim();
+              config.cloudflare.zoneId = zoneId.trim();
+              saveConfig(config);
+              updateTerraformVars(config);
+
+              console.log(`\n${colors.green}✓ Cloudflare configuration saved!${colors.reset}\n`);
+              setTimeout(() => {
+                setupReadline();
+                displayStep();
+              }, 1000);
+            } else {
+              setupReadline();
+              displayStep();
+            }
+          });
+        });
+      });
+
       return;
     }
   }

@@ -97,6 +97,28 @@ services:
   #     start_period: 10s
   # [REDIS_END]
 
+  # ==========================================
+  # Optional: Cloudflare Tunnel for Custom Domain + HTTPS
+  # ==========================================
+  # Uncomment this service to enable custom domain with automatic HTTPS.
+  # Requires: CLOUDFLARE_TUNNEL_TOKEN secret configured in GitHub
+  # See docs/SETUP.md for complete setup instructions
+  # ==========================================
+  #
+  # [CLOUDFLARE_START]
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+    networks:
+      - app-network
+  # [CLOUDFLARE_END]
+
 networks:
   app-network:
     driver: bridge
