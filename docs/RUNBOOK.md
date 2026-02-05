@@ -442,30 +442,36 @@ To permanently remove:
 
 Your application can access environment variables defined in the `.env` file on the VPS.
 
-#### How Secrets Flow to Containers
+#### How Configuration Flows to Containers
 
-GitHub Secrets are automatically deployed to your application through a 6-step pipeline. Understanding this flow helps with debugging configuration issues.
+Configuration is automatically deployed through a centralized pipeline. Understanding this flow helps with debugging configuration issues.
 
 ```
 +---------------------------+
-|     GITHUB SECRETS        |  1. User adds secrets in GitHub UI
+| INFRASTRUCTURE OUTPUTS    |  1. Terraform state uploaded as artifact
+| (Terraform State)         |  Contains: VPS_HOST, tunnel tokens, etc.
 +-------------+-------------+
               |
               v
 +---------------------------+
-|      deploy.yml           |  2. Workflow reads via ${{ secrets.VAR }}
+|      deploy.yml           |  2. Downloads state, extracts outputs
+| (GitHub Actions)          |  Combines: GitHub Secrets + Terraform outputs
 +-------------+-------------+
               |
+              | Generates complete .env file
               v
 +---------------------------+
-|   SSH to VPS              |  3. Variables exported to shell
+|   .env FILE (Generated)   |  3. Complete configuration in one file
+|   (on GitHub runner)      |  Uses shell defaults ${VAR:-default}
 +-------------+-------------+
               |
+              | SCP copy to VPS
               v
 +---------------------------+
-|      update.sh            |  4. Script writes to /opt/app/.env
+|   VPS (/opt/app/.env)     |  4. .env file available on VPS
 +-------------+-------------+
               |
+              | docker compose reads automatically
               v
 +---------------------------+
 |   docker-compose.yml      |  5. Compose reads ${VAR} from .env
@@ -481,39 +487,53 @@ GitHub Secrets are automatically deployed to your application through a 6-step p
 
 | Step | File | Location | What It Does |
 |------|------|----------|--------------|
-| 1 | GitHub Secrets | Repository Settings | Secure storage for sensitive values |
-| 2-3 | `deploy.yml` | `.github/workflows/deploy.yml` | Reads secrets, SSHs to VPS, exports variables |
-| 4 | `update.sh` | `/opt/app/update.sh` | Writes variables to `.env` file |
-| 5 | `docker-compose.yml` | `/opt/app/docker-compose.yml` | Substitutes `${VAR}` and passes to container |
-| 6 | `.env` | `/opt/app/.env` | Runtime config file (auto-generated) |
+| 1 | Terraform State | GitHub Actions artifact | Infrastructure outputs (auto-extracted) |
+| 2 | GitHub Secrets | Repository Settings | Application secrets (database passwords, API keys) |
+| 2 | `deploy.yml` | `.github/workflows/deploy.yml` | Generates .env, copies to VPS |
+| 4-5 | `docker-compose.yml` | `/opt/app/docker-compose.yml` | Reads .env, substitutes `${VAR}` |
+| 4 | `.env` | `/opt/app/.env` | Runtime config file (auto-generated) |
+| 6 | `update.sh` | `/opt/app/update.sh` | Verifies .env exists, runs deployment |
 
 #### Code Flow Example
 
-Tracing `POSTGRES_PASSWORD` through the pipeline:
+Tracing `POSTGRES_PASSWORD` and `VPS_HOST` through the pipeline:
 
-**deploy.yml (reads and exports):**
+**deploy.yml (extracts Terraform outputs):**
 ```yaml
-env:
-  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-
-run: |
-  ssh deploy@${{ secrets.VPS_HOST }} << 'EOF'
-    export POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"
-    ./update.sh
-  EOF
+- name: Extract Terraform outputs
+  id: terraform_outputs
+  run: |
+    VPS_HOST=$(jq -r '.outputs.server_ip.value' ./terraform-state/terraform.tfstate)
+    echo "vps_host=${VPS_HOST}" >> $GITHUB_OUTPUT
 ```
 
-**update.sh (writes to .env):**
-```bash
-cat > .env <<EOF
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
-EOF
+**deploy.yml (generates .env with ALL variables):**
+```yaml
+- name: Generate environment configuration
+  run: |
+    cat > .env << 'EOF'
+    # Database Configuration
+    POSTGRES_USER=${POSTGRES_USER:-app}
+    POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+    POSTGRES_DB=${POSTGRES_DB:-app}
+
+    # Cloudflare Configuration (from Terraform)
+    CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    EOF
+  env:
+    POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
+
+- name: Copy environment to VPS
+  run: |
+    scp -i ~/.ssh/deploy_key .env deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/.env
 ```
 
 **docker-compose.yml (reads from .env):**
 ```yaml
 environment:
-  - DATABASE_URL=postgresql://app:${POSTGRES_PASSWORD}@postgres:5432/app
+  - DATABASE_URL=postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+  - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 ```
 
 **Your application:**
@@ -524,59 +544,69 @@ const dbUrl = process.env.DATABASE_URL
 
 #### The .env File is Auto-Generated
 
-**Critical**: The `.env` file at `/opt/app/.env` is **overwritten on every deployment** by the `update.sh` script.
+**Critical**: The `.env` file at `/opt/app/.env` is **completely managed by the deployment workflow**.
 
+- Generated fresh on every deployment by GitHub Actions
+- Combines GitHub Secrets + Terraform outputs + GitHub context
 - Manual edits to this file will be lost on next `git push`
-- To add persistent variables, update the deployment pipeline (see [SETUP.md](SETUP.md#47-how-secrets-flow-to-your-application))
-- The file is created with restricted permissions for security
+- To add persistent variables, update `.github/workflows/deploy.yml` (see below)
+- The file is created with restricted permissions (600) for security
 
 #### When to Use Each Method
 
 | Method | Use For | Persists Across Deploys |
 |--------|---------|-------------------------|
-| GitHub Secrets | API keys, passwords, tokens | Yes (recommended) |
+| GitHub Secrets + deploy.yml | API keys, passwords, tokens | Yes (recommended) |
 | Direct `.env` edit | Quick testing, debugging | No |
 | Hetzner Console edit | Emergency fixes | No |
 
 #### Two Methods to Configure Environment Variables
 
-#### Method 1: Via GitHub Secrets (Recommended for Secrets)
+#### Method 1: Via GitHub Secrets + deploy.yml (Recommended)
 
-This is the recommended approach for sensitive values like API keys, database credentials, and tokens.
+This is the recommended approach for all persistent configuration. You only need to edit **one file**: `.github/workflows/deploy.yml`
 
 1. **Add the secret in GitHub**:
    - Go to your repository on GitHub
    - Navigate to `Settings` > `Secrets and variables` > `Actions`
    - Click `New repository secret`
-   - Enter the name (e.g., `API_KEY`) and value
+   - Enter the name (e.g., `STRIPE_API_KEY`) and value
 
-2. **Update the deployment workflow** to pass the secret to the VPS:
+2. **Update deploy.yml** to include the variable in `.env` generation:
 
-   Edit `.github/workflows/deploy.yml` and add your variable to the SSH deployment step:
+   Edit `.github/workflows/deploy.yml` and add to the "Generate environment configuration" step:
    ```yaml
-   - name: Deploy to VPS
+   - name: Generate environment configuration
      run: |
-       ssh deploy@${{ secrets.VPS_HOST }} << 'EOF'
-         cd /opt/app
-         echo "API_KEY=${{ secrets.API_KEY }}" >> .env
-         docker compose pull app
-         docker compose up -d app
+       cat > .env << 'EOF'
+       # ... existing variables ...
+
+       # Application Secrets
+       STRIPE_API_KEY=${STRIPE_API_KEY:-}  # <-- ADD THIS LINE
        EOF
+     env:
+       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+       STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}  # <-- ADD THIS LINE
+       CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
    ```
 
-3. **Reference the variable in docker-compose.yml**:
+3. **(Optional) Reference in docker-compose.yml** if you need to explicitly pass it:
    ```yaml
    services:
      app:
        environment:
-         - API_KEY=${API_KEY}
+         - STRIPE_API_KEY=${STRIPE_API_KEY}
    ```
 
 4. **Push changes** - the variable will be available on next deployment.
 
-#### Method 2: Direct Editing via Hetzner Console (For Non-Sensitive Values)
+**That's it!** No need to edit multiple files. The `.env` file is automatically generated and copied to your VPS.
 
-For non-sensitive configuration values, you can edit the `.env` file directly on the VPS using Hetzner Cloud Console.
+#### Method 2: Direct Editing via Hetzner Console (For Testing Only)
+
+For quick testing or emergency fixes, you can edit the `.env` file directly on the VPS using Hetzner Cloud Console.
+
+> **Warning**: These changes will be **lost on the next deployment**. Use Method 1 for persistent changes.
 
 > **Note**: Direct SSH is restricted to GitHub Actions only. Use [Hetzner Cloud Console](https://console.hetzner.cloud/) for interactive access.
 
@@ -588,7 +618,7 @@ nano .env
 # Add your variables
 # Example contents:
 # NODE_ENV=production
-# LOG_LEVEL=info
+# LOG_LEVEL=debug         # <-- Testing debug mode temporarily
 # MAX_CONNECTIONS=100
 
 # Save and exit (Ctrl+X, Y, Enter in nano)

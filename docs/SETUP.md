@@ -437,42 +437,47 @@ For **Redis**:
 
 See the [Database Setup](#database-setup) section for detailed instructions.
 
-### 4.7 How Secrets Flow to Your Application
+### 4.7 How Configuration Reaches Your Application
 
-Understanding how GitHub Secrets reach your application containers is essential for debugging configuration issues and adding new variables. This section explains the complete 6-step pipeline that moves secrets from GitHub to your running container.
+Understanding how configuration and secrets reach your application containers is essential for debugging and adding new variables. This section explains the streamlined pipeline.
 
-#### The Secrets Pipeline Overview
+#### The Configuration Pipeline Overview
 
 ```
 +---------------------------+
-|     GITHUB SECRETS        |  Step 1: You add secrets here
-|   (Repository Settings)   |  Example: POSTGRES_PASSWORD = "mySecurePass123"
+| INFRASTRUCTURE WORKFLOW   |  Step 1: Terraform outputs are
+| (infrastructure.yml)      |  automatically extracted from
+|                           |  uploaded state artifact
 +-------------+-------------+
               |
-              | ${{ secrets.POSTGRES_PASSWORD }}
+              | Terraform state artifact (JSON)
+              | Contains: VPS_HOST, CLOUDFLARE_TUNNEL_TOKEN,
+              |           HEALTHCHECK_URL, CUSTOM_DOMAIN_URL
               v
 +---------------------------+
-|   GITHUB ACTIONS WORKFLOW |  Step 2: deploy.yml reads secrets
-| (.github/workflows/       |  and makes them available as
-|  deploy.yml)              |  environment variables
+|     DEPLOY WORKFLOW       |  Step 2: Download artifact and
+| (.github/workflows/       |  extract infrastructure outputs
+|  deploy.yml)              |  using jq
 +-------------+-------------+
               |
-              | SSH connection with exported env vars
-              | export POSTGRES_PASSWORD="mySecurePass123"
+              | Generate .env file with ALL configuration
+              | (GitHub context + secrets + Terraform outputs)
               v
 +---------------------------+
-|       VPS SERVER          |  Step 3: SSH session receives
-|   (via SSH connection)    |  variables as shell environment
+|   .env FILE (GENERATED)   |  Step 3: Complete configuration
+|   (on GitHub runner)      |  file with shell defaults
+|                           |  ${VARIABLE:-default}
 +-------------+-------------+
               |
-              | ./update.sh script runs
+              | SCP copy .env to VPS
+              | /opt/app/.env
               v
 +---------------------------+
-|      update.sh SCRIPT     |  Step 4: Script writes variables
-|   (deploy/update.sh)      |  to /opt/app/.env file
+|       VPS SERVER          |  Step 4: .env file available
+|   (/opt/app/.env)         |  on VPS filesystem
 +-------------+-------------+
               |
-              | docker compose reads .env
+              | docker compose reads .env automatically
               v
 +---------------------------+
 |    docker-compose.yml     |  Step 5: Compose substitutes
@@ -489,96 +494,141 @@ Understanding how GitHub Secrets reach your application containers is essential 
 
 #### Complete Code Walkthrough
 
-Let's trace exactly how `POSTGRES_PASSWORD` flows through each file:
+Let's trace exactly how `POSTGRES_PASSWORD` and `VPS_HOST` flow through the pipeline:
 
-**Step 1: Add Secret in GitHub**
+**Step 1: Infrastructure Outputs (Auto-Extracted)**
 
-Go to your repository on GitHub:
-```
-Settings > Secrets and variables > Actions > New repository secret
-
-Name:   POSTGRES_PASSWORD
-Value:  mySecurePass123
-```
-
-**Step 2: Workflow Reads the Secret**
-
-In `.github/workflows/deploy.yml`, the secret is read and passed to the SSH step:
+After running the **Provision Infrastructure** workflow, Terraform state is saved as an artifact. The deploy workflow automatically downloads and extracts it:
 
 ```yaml
-# deploy.yml lines 136-139
-- name: Deploy application
+# deploy.yml - Download Terraform state
+- name: Download infrastructure outputs
+  uses: dawidd6/action-download-artifact@v3
+  continue-on-error: true
+  with:
+    workflow: infrastructure.yml
+    name: terraform-state
+    path: ./terraform-state
+
+# Extract outputs using jq
+- name: Extract Terraform outputs
+  id: terraform_outputs
   run: |
-    ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
-      # ... commands here ...
+    if [ -f ./terraform-state/terraform.tfstate ]; then
+      VPS_HOST=$(jq -r '.outputs.server_ip.value' ./terraform-state/terraform.tfstate)
+      CLOUDFLARE_TUNNEL_TOKEN=$(jq -r '.outputs.cloudflare_tunnel_token.value // ""' ./terraform-state/terraform.tfstate)
+      HEALTHCHECK_URL=$(jq -r '.outputs.healthcheck_ping_url.value // ""' ./terraform-state/terraform.tfstate)
+      CUSTOM_DOMAIN=$(jq -r '.outputs.custom_domain_url.value // ""' ./terraform-state/terraform.tfstate)
+
+      echo "vps_host=${VPS_HOST}" >> $GITHUB_OUTPUT
+      echo "cloudflare_tunnel_token=${CLOUDFLARE_TUNNEL_TOKEN}" >> $GITHUB_OUTPUT
+      echo "healthcheck_url=${HEALTHCHECK_URL}" >> $GITHUB_OUTPUT
+      echo "custom_domain_url=${CUSTOM_DOMAIN}" >> $GITHUB_OUTPUT
+      echo "✓ Extracted outputs from Terraform state"
+    fi
+```
+
+**No manual secret copying required!** Infrastructure outputs are discovered automatically.
+
+**Step 2: Generate Centralized .env File**
+
+The deploy workflow generates a complete `.env` file in a single location:
+
+```yaml
+# deploy.yml - Generate .env with ALL configuration
+- name: Generate environment configuration
+  run: |
+    cat > .env << 'EOF'
+    # GitHub Context
+    GITHUB_REPOSITORY=${{ github.repository }}
+    GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+    GITHUB_ACTOR=${{ github.actor }}
+
+    # Database Configuration (using shell defaults)
+    POSTGRES_USER=${POSTGRES_USER:-app}
+    POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}           # <-- From GitHub Secret
+    POSTGRES_DB=${POSTGRES_DB:-app}
+    MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-}
+    MYSQL_USER=${MYSQL_USER:-app}
+    MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
+    MYSQL_DATABASE=${MYSQL_DATABASE:-app}
+    REDIS_PASSWORD=${REDIS_PASSWORD:-}
+
+    # Cloudflare Configuration (from Terraform)
+    CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}  # <-- From Terraform
     EOF
   env:
-    POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}  # <-- Read from GitHub
+    # Database secrets from GitHub Secrets
+    POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+    MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+    REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+    # Cloudflare from Terraform outputs
+    CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
 ```
 
-The `env:` block makes the secret available as an environment variable within this step.
+**Key Points:**
+- Single source of truth for all environment variables
+- Shell defaults `${VAR:-default}` handle missing values gracefully
+- GitHub Actions expands `${{ ... }}` syntax before writing file
+- Shell expands `${VAR:-default}` when docker-compose reads .env
 
-**Step 3: SSH Exports the Variable**
-
-Inside the SSH heredoc (lines 117-135), the variable is exported:
-
-```yaml
-# deploy.yml lines 122-130
-ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
-  export GITHUB_REPOSITORY=${{ github.repository }}
-  export POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"  # <-- Exported to shell
-  # ... more exports ...
-
-  cd /opt/app
-  chmod +x update.sh
-  ./update.sh  # <-- Script runs with these vars in environment
-EOF
-```
-
-**Step 4: update.sh Writes to .env File**
-
-The `deploy/update.sh` script captures environment variables and writes them to `/opt/app/.env`:
-
-```bash
-# update.sh lines 14-25
-cat > .env <<EOF
-GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
-POSTGRES_USER=${POSTGRES_USER:-app}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}           # <-- Written to .env
-POSTGRES_DB=${POSTGRES_DB:-app}
-# ... more variables ...
-EOF
-```
-
-After this runs, the `.env` file on the VPS contains:
+After this step runs, the `.env` file on the GitHub runner contains:
 ```
 GITHUB_REPOSITORY=youruser/yourrepo
+GITHUB_TOKEN=ghp_xxxxx
+GITHUB_ACTOR=youruser
 POSTGRES_USER=app
 POSTGRES_PASSWORD=mySecurePass123
 POSTGRES_DB=app
+CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiNzk4...
 ```
 
-**Step 5: docker-compose.yml Reads from .env**
+**Step 3: Copy .env to VPS**
 
-Docker Compose automatically loads the `.env` file and substitutes variables:
+The complete `.env` file is copied to the VPS via SCP:
 
 ```yaml
-# docker-compose.yml lines 12-16
+# deploy.yml - Copy .env to VPS
+- name: Copy environment to VPS
+  run: |
+    scp -i ~/.ssh/deploy_key .env deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/.env
+```
+
+**Step 4: Docker Compose Reads .env**
+
+The `deploy/update.sh` script verifies the `.env` file exists (no generation needed):
+
+```bash
+# update.sh - Verify .env was copied
+if [ ! -f .env ]; then
+  echo "ERROR: .env file not found. It should be copied during deployment."
+  exit 1
+fi
+
+echo "Using environment configuration from .env file..."
+```
+
+Docker Compose automatically loads `/opt/app/.env` and substitutes variables:
+
+```yaml
+# docker-compose.yml
 services:
   app:
     environment:
+      - NODE_ENV=production
       # ${POSTGRES_PASSWORD} is replaced with "mySecurePass123"
       - DATABASE_URL=postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+
+  cloudflared:
+    environment:
+      # ${CLOUDFLARE_TUNNEL_TOKEN} is replaced with actual token from Terraform
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 ```
 
-The resulting environment variable passed to the container:
-```
-DATABASE_URL=postgresql://app:mySecurePass123@postgres:5432/app
-```
+**Step 5: Application Accesses Variables**
 
-**Step 6: Application Accesses the Variable**
-
-Your application code reads the variable via standard environment access:
+Your application code reads variables via standard environment access:
 
 ```javascript
 // Node.js
@@ -592,7 +642,7 @@ db_url = os.environ.get('DATABASE_URL')
 
 #### Adding Your Own Custom Secrets
 
-To add a new secret (e.g., `STRIPE_API_KEY`) that your application needs, you must update 4 files:
+To add a new secret (e.g., `STRIPE_API_KEY`), you only need to edit **ONE file**: `.github/workflows/deploy.yml`
 
 **1. Add the secret in GitHub**
 
@@ -605,87 +655,81 @@ Value:  sk_live_xxxxxxxxxxxx
 
 **2. Update `.github/workflows/deploy.yml`**
 
-Add to the `env:` section of the "Deploy application" step:
+Add to both the `.env` generation and the `env:` section:
 
 ```yaml
-- name: Deploy application
+- name: Generate environment configuration
   run: |
-    ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
-      export GITHUB_REPOSITORY=${{ github.repository }}
-      export STRIPE_API_KEY="${STRIPE_API_KEY}"     # <-- ADD THIS LINE
-      # ... existing exports ...
+    cat > .env << 'EOF'
+    # ... existing variables ...
 
-      cd /opt/app
-      ./update.sh
+    # Application Secrets
+    STRIPE_API_KEY=${STRIPE_API_KEY:-}               # <-- ADD THIS LINE
     EOF
   env:
     POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-    STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}  # <-- ADD THIS LINE
+    STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}    # <-- ADD THIS LINE
+    CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
 ```
 
-**3. Update `deploy/update.sh`**
+**3. (Optional) Use in docker-compose.yml**
 
-Add the variable to the `.env` file generation:
-
-```bash
-cat > .env <<EOF
-GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
-STRIPE_API_KEY=${STRIPE_API_KEY:-}                  # <-- ADD THIS LINE
-EOF
-```
-
-**4. Update `deploy/docker-compose.yml`**
-
-Add to your app's environment section:
+If you need to explicitly pass it to a specific service:
 
 ```yaml
 services:
   app:
     environment:
       - NODE_ENV=production
-      - STRIPE_API_KEY=${STRIPE_API_KEY}            # <-- ADD THIS LINE
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
 ```
 
-**5. Access in your application**
+**4. Access in your application**
 
 ```javascript
 const stripeKey = process.env.STRIPE_API_KEY
 ```
 
+That's it! No need to edit multiple files. The `.env` file is automatically generated and copied to your VPS on every deployment.
+
 #### Key Files in the Pipeline
 
 | File | Location | Role |
 |------|----------|------|
-| GitHub Secrets | Repository Settings | Secure storage for sensitive values |
-| `deploy.yml` | `.github/workflows/deploy.yml` | Reads secrets, exports via SSH |
-| `update.sh` | `deploy/update.sh` (copied to `/opt/app/`) | Writes secrets to `.env` file |
-| `docker-compose.yml` | `deploy/docker-compose.yml` (copied to `/opt/app/`) | Passes env vars to container |
-| `.env` | `/opt/app/.env` (auto-generated) | Runtime config file on VPS |
+| Terraform State | GitHub Actions artifact | Infrastructure outputs (VPS_HOST, tunnel tokens, etc.) |
+| GitHub Secrets | Repository Settings | Application secrets (database passwords, API keys) |
+| `deploy.yml` | `.github/workflows/deploy.yml` | Downloads state, generates .env, copies to VPS |
+| `.env` | `/opt/app/.env` (auto-generated) | Complete runtime configuration on VPS |
+| `docker-compose.yml` | `deploy/docker-compose.yml` | Reads .env, passes vars to containers |
+| `update.sh` | `deploy/update.sh` | Verifies .env exists, runs deployment |
 
 #### Important Notes
 
-**The .env file is auto-generated on every deployment:**
-- The `update.sh` script overwrites `/opt/app/.env` each time
-- Manual edits to `.env` will be lost on next deployment
-- To persist changes, add them to GitHub Secrets and update the pipeline
+**The .env file is completely managed by the deployment pipeline:**
+- Generated fresh on every deployment from GitHub Actions
+- Combines GitHub Secrets + Terraform outputs + GitHub context
+- Manual edits to `/opt/app/.env` on VPS will be lost on next deployment
+- To persist changes, update them in GitHub Secrets or Terraform variables
 
-**Variables must be explicitly passed at each step:**
-- Forgetting any step will result in an empty or undefined variable
-- Use the 4-file checklist above when adding new secrets
+**Infrastructure outputs are auto-discovered:**
+- No manual copying of VPS_HOST, CLOUDFLARE_TUNNEL_TOKEN, etc.
+- Deploy workflow downloads Terraform state artifact automatically
+- Falls back to GitHub Secrets if Terraform state is unavailable
 
-**Use default values for optional variables:**
+**Shell defaults handle missing values gracefully:**
 ```bash
-# In update.sh - default to empty string if not set
+# In .env generation - empty string if not set
 OPTIONAL_VAR=${OPTIONAL_VAR:-}
 
-# In docker-compose.yml - default to specific value
+# In docker-compose.yml - specific default value
 - LOG_LEVEL=${LOG_LEVEL:-info}
+- POSTGRES_USER=${POSTGRES_USER:-app}
 ```
 
 **Security considerations:**
 - Secrets are never logged in GitHub Actions output
-- The `.env` file on the VPS has restricted permissions
+- The `.env` file on the VPS has restricted permissions (600)
+- Terraform state artifact expires after 90 days
 - Never commit secrets to git (`.env` is in `.gitignore`)
 - Use GitHub Secrets for all sensitive values (API keys, passwords, tokens)
 
@@ -743,25 +787,14 @@ Click on the **"Summary"** to see:
 
 ### 5.5 Configure Deployment Secrets
 
-The workflow summary will show you two secrets that need to be added for automatic deployments:
+**✅ Infrastructure is ready!** The deploy workflow will automatically discover:
+- VPS IP address (`VPS_HOST`)
+- Healthcheck ping URL (if configured)
+- Cloudflare tunnel token (if configured)
 
-1. **Go to Settings** → **Secrets and variables** → **Actions**
+**No manual secret copying required!** The deploy workflow reads these values directly from the Terraform state artifact.
 
-2. **Add VPS_HOST secret:**
-   - Click **"New repository secret"**
-   - **Name**: `VPS_HOST`
-   - **Secret**: Copy the IP address from the workflow summary
-   - Click **"Add secret"**
-
-3. **Add HEALTHCHECK_PING_URL secret (if you configured healthchecks.io):**
-   - Click **"New repository secret"**
-   - **Name**: `HEALTHCHECK_PING_URL`
-   - **Secret**: Copy the ping URL from the workflow summary
-   - Click **"Add secret"**
-
-   **If you didn't configure healthchecks.io**: Skip this secret or leave it empty.
-
-✅ **Checkpoint**: Deployment secrets configured - automatic deployments will now work!
+✅ **Checkpoint**: Infrastructure provisioned - automatic deployments will now work!
 
 ---
 
