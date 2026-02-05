@@ -114,31 +114,30 @@ jobs:
 
       - name: Deploy application
         run: |
-          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} << 'EOF'
-            export GITHUB_REPOSITORY=${{ github.repository }}
-            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            export GITHUB_ACTOR=${{ github.actor }}
-
-            # Export database credentials if configured
-            export POSTGRES_USER="${POSTGRES_USER:-app}"
-            export POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"
-            export POSTGRES_DB="${POSTGRES_DB:-app}"
-            export MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}"
-            export MYSQL_USER="${MYSQL_USER:-app}"
-            export MYSQL_PASSWORD="${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD}}"
-            export MYSQL_DATABASE="${MYSQL_DATABASE:-app}"
-            export REDIS_PASSWORD="${REDIS_PASSWORD}"
-
-            # Export Cloudflare tunnel token if configured
-            export CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN}"
-
-            cd /opt/app
-            chmod +x update.sh
-            ./update.sh
-          EOF
+          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} \
+            "export GITHUB_REPOSITORY='${{ github.repository }}' && \
+             export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' && \
+             export GITHUB_ACTOR='${{ github.actor }}' && \
+             export POSTGRES_USER='${POSTGRES_USER:-app}' && \
+             export POSTGRES_PASSWORD='${POSTGRES_PASSWORD}' && \
+             export POSTGRES_DB='${POSTGRES_DB:-app}' && \
+             export MYSQL_ROOT_PASSWORD='${MYSQL_ROOT_PASSWORD}' && \
+             export MYSQL_USER='${MYSQL_USER:-app}' && \
+             export MYSQL_PASSWORD='${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD}}' && \
+             export MYSQL_DATABASE='${MYSQL_DATABASE:-app}' && \
+             export REDIS_PASSWORD='${REDIS_PASSWORD}' && \
+             export CLOUDFLARE_TUNNEL_TOKEN='${CLOUDFLARE_TUNNEL_TOKEN}' && \
+             cd /opt/app && \
+             chmod +x update.sh && \
+             ./update.sh"
         env:
+          POSTGRES_USER: app
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: app
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_USER: app
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          MYSQL_DATABASE: app
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
 
