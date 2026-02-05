@@ -112,35 +112,29 @@ jobs:
             ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} 'chmod +x /opt/app/scripts/db-backup.sh'
           fi
 
-      - name: Debug - Check Cloudflare Token
+      - name: Generate environment configuration
         run: |
-          if [ -z "${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" ]; then
-            echo "⚠️ CLOUDFLARE_TUNNEL_TOKEN is empty or not set in GitHub Secrets"
-          else
-            echo "✓ CLOUDFLARE_TUNNEL_TOKEN is set (length: ${#CLOUDFLARE_TUNNEL_TOKEN})"
-          fi
-        env:
-          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+          cat > .env << 'EOF'
+          # GitHub Context
+          GITHUB_REPOSITORY=${{ github.repository }}
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR=${{ github.actor }}
 
-      - name: Deploy application
-        run: |
-          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.VPS_HOST }} \
-            "export GITHUB_REPOSITORY='${{ github.repository }}' && \
-             export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' && \
-             export GITHUB_ACTOR='${{ github.actor }}' && \
-             export POSTGRES_USER='${POSTGRES_USER:-app}' && \
-             export POSTGRES_PASSWORD='${POSTGRES_PASSWORD}' && \
-             export POSTGRES_DB='${POSTGRES_DB:-app}' && \
-             export MYSQL_ROOT_PASSWORD='${MYSQL_ROOT_PASSWORD}' && \
-             export MYSQL_USER='${MYSQL_USER:-app}' && \
-             export MYSQL_PASSWORD='${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD}}' && \
-             export MYSQL_DATABASE='${MYSQL_DATABASE:-app}' && \
-             export REDIS_PASSWORD='${REDIS_PASSWORD}' && \
-             export CLOUDFLARE_TUNNEL_TOKEN='${CLOUDFLARE_TUNNEL_TOKEN}' && \
-             cd /opt/app && \
-             chmod +x update.sh && \
-             ./update.sh"
+          # Database Configuration
+          POSTGRES_USER=${POSTGRES_USER}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          POSTGRES_DB=${POSTGRES_DB}
+          MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+          MYSQL_USER=${MYSQL_USER}
+          MYSQL_PASSWORD=${MYSQL_PASSWORD}
+          MYSQL_DATABASE=${MYSQL_DATABASE}
+          REDIS_PASSWORD=${REDIS_PASSWORD}
+
+          # Cloudflare Configuration
+          CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+          EOF
         env:
+          # Database defaults and secrets
           POSTGRES_USER: app
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: app
@@ -149,7 +143,17 @@ jobs:
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
           MYSQL_DATABASE: app
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          # Cloudflare
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+
+      - name: Copy environment to VPS
+        run: |
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no .env deploy@${{ secrets.VPS_HOST }}:/opt/app/.env
+
+      - name: Deploy application
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@${{ secrets.VPS_HOST }} \
+            'cd /opt/app && chmod +x update.sh && ./update.sh'
 
       - name: Ping healthcheck
         if: success()

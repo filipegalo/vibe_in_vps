@@ -238,8 +238,29 @@ This project explicitly does NOT support:
 - `CUSTOM_DOMAIN_URL` - Custom domain HTTPS URL (from Terraform output, if custom domain enabled)
 
 ### Runtime (VPS `.env` file)
-- `GITHUB_REPOSITORY` - Format: username/repo-name
-- Application-specific variables (user-defined)
+
+The `.env` file on the VPS is **automatically generated** by the deploy workflow. All environment variables are defined in `.github/workflows/deploy.yml` and copied to the VPS.
+
+**Current variables:**
+- `GITHUB_REPOSITORY` - Repository name (e.g., user/repo)
+- `GITHUB_TOKEN` - Temporary token for GHCR access
+- `GITHUB_ACTOR` - User who triggered deployment
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` - PostgreSQL credentials
+- `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` - MySQL credentials
+- `REDIS_PASSWORD` - Redis password
+- `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare tunnel token
+
+**Adding new variables:**
+Edit `.github/workflows/deploy.yml` → "Generate environment configuration" step. Add your variable once:
+```yaml
+# In the cat > .env section
+MY_NEW_VARIABLE=${MY_NEW_VARIABLE}
+
+# In the env: section
+MY_NEW_VARIABLE: ${{ secrets.MY_NEW_VARIABLE }}
+```
+
+No other files need editing. The variable will automatically be available in docker-compose.yml as `${MY_NEW_VARIABLE}`.
 
 ---
 

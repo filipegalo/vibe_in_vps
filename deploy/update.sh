@@ -10,20 +10,13 @@ echo "=== Deployment: Updating Application ==="
 
 cd /opt/app
 
-# Write environment variables to .env file for docker-compose
-echo "Writing environment configuration..."
-cat > .env <<EOF
-GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
-POSTGRES_USER=${POSTGRES_USER:-app}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
-POSTGRES_DB=${POSTGRES_DB:-app}
-MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-}
-MYSQL_USER=${MYSQL_USER:-app}
-MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
-MYSQL_DATABASE=${MYSQL_DATABASE:-app}
-REDIS_PASSWORD=${REDIS_PASSWORD:-}
-CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
-EOF
+# Verify .env exists (should be copied by deployment workflow)
+if [ ! -f .env ]; then
+  echo "ERROR: .env file not found. It should be copied during deployment."
+  exit 1
+fi
+
+echo "Using environment configuration from .env file..."
 
 # Login to GitHub Container Registry
 echo "Logging in to GHCR..."
