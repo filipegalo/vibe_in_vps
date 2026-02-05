@@ -18,6 +18,11 @@ fi
 
 echo "Using environment configuration from .env file..."
 
+# Load environment variables from .env file
+set -a  # automatically export all variables
+source .env
+set +a
+
 # Login to GitHub Container Registry
 echo "Logging in to GHCR..."
 echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
