@@ -243,7 +243,7 @@ The deploy workflow automatically downloads the Terraform state artifact and ext
 
 ### Runtime (VPS `.env` file)
 
-The `.env` file on the VPS is **automatically generated** by the deploy workflow. All environment variables are defined in `.github/workflows/deploy.yml` and copied to the VPS.
+The `.env` file on the VPS is **automatically generated** by `scripts/generate-env.sh` (called from deploy workflow) and copied to the VPS.
 
 **Current variables:**
 - `GITHUB_REPOSITORY` - Repository name (e.g., user/repo)
@@ -254,17 +254,26 @@ The `.env` file on the VPS is **automatically generated** by the deploy workflow
 - `REDIS_PASSWORD` - Redis password
 - `CLOUDFLARE_TUNNEL_TOKEN` - Cloudflare tunnel token
 
-**Adding new variables:**
-Edit `.github/workflows/deploy.yml` → "Generate environment configuration" step. Add your variable once:
-```yaml
-# In the cat > .env section
-MY_NEW_VARIABLE=${MY_NEW_VARIABLE}
+**Adding new variables (requires editing 2 files):**
 
-# In the env: section
-MY_NEW_VARIABLE: ${{ secrets.MY_NEW_VARIABLE }}
+1. Edit `scripts/generate-env.sh` → Add to .env template:
+```bash
+cat > "${OUTPUT_FILE}" << 'EOF'
+# ... existing variables ...
+MY_NEW_VARIABLE=${MY_NEW_VARIABLE:-}
+EOF
 ```
 
-No other files need editing. The variable will automatically be available in docker-compose.yml as `${MY_NEW_VARIABLE}`.
+2. Edit `.github/workflows/deploy.yml` → Add to env: section:
+```yaml
+- name: Generate environment configuration
+  run: ./scripts/generate-env.sh
+  env:
+    # ... existing env vars ...
+    MY_NEW_VARIABLE: ${{ secrets.MY_NEW_VARIABLE }}
+```
+
+The variable will automatically be available in docker-compose.yml as `${MY_NEW_VARIABLE}`.
 
 ---
 
@@ -433,6 +442,30 @@ Alternatively, use GitHub Actions workflows or Hetzner Cloud Console. See docs/R
   - **Verdict**: Cloudflare Tunnel (Option A) best fits project philosophy of "boring, proven tools" optimized for simplicity
 - **Migration**: Existing users unaffected, purely additive feature (backward compatible)
 - **Documentation**: Complete guide in SETUP.md, operations guide in RUNBOOK.md, architecture decisions in CLAUDE.md
+
+### 2026-02-05: Extract .env Generation to Dedicated Script
+- **Decided**: Extract .env generation logic from deploy.yml to `scripts/generate-env.sh`
+- **Rationale**:
+  - Cleaner deploy.yml workflow (removed 30+ lines of inline bash)
+  - Testable .env generation logic (can be run locally)
+  - Reusable script (could be used for local development testing)
+  - Better separation of concerns (deployment orchestration vs config generation)
+  - Clearer documentation (script has inline comments explaining each variable)
+- **Implementation**:
+  - Created `scripts/generate-env.sh` with all .env template logic
+  - Script accepts environment variables via shell environment
+  - Outputs summary without exposing secrets (shows `<set>` or `<empty>`)
+  - deploy.yml now calls `./scripts/generate-env.sh` with env: block
+  - All environment variables passed via env: section (GitHub Actions expands `${{ ... }}`)
+- **Trade-offs**:
+  - Adding new variables now requires editing 2 files instead of 1 (script + deploy.yml)
+  - Accepted because: Script is clearer, testable, and 99% of users won't add variables often
+- **Benefits**:
+  - deploy.yml reduced from 30 lines to 15 lines for .env generation
+  - Script can be tested locally: `POSTGRES_PASSWORD=test ./scripts/generate-env.sh && cat .env`
+  - Better error messages (script validates and reports issues)
+  - Easier to understand for new contributors
+- **Documentation**: Updated SETUP.md, RUNBOOK.md, and CLAUDE.md to reflect two-file approach
 
 ---
 

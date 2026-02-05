@@ -532,46 +532,53 @@ After running the **Provision Infrastructure** workflow, Terraform state is save
 
 **Step 2: Generate Centralized .env File**
 
-The deploy workflow generates a complete `.env` file in a single location:
+The deploy workflow calls `scripts/generate-env.sh` to create a complete `.env` file:
 
 ```yaml
-# deploy.yml - Generate .env with ALL configuration
+# deploy.yml - Generate .env using dedicated script
 - name: Generate environment configuration
-  run: |
-    cat > .env << 'EOF'
-    # GitHub Context
-    GITHUB_REPOSITORY=${{ github.repository }}
-    GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-    GITHUB_ACTOR=${{ github.actor }}
-
-    # Database Configuration (using shell defaults)
-    POSTGRES_USER=${POSTGRES_USER:-app}
-    POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}           # <-- From GitHub Secret
-    POSTGRES_DB=${POSTGRES_DB:-app}
-    MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-}
-    MYSQL_USER=${MYSQL_USER:-app}
-    MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
-    MYSQL_DATABASE=${MYSQL_DATABASE:-app}
-    REDIS_PASSWORD=${REDIS_PASSWORD:-}
-
-    # Cloudflare Configuration (from Terraform)
-    CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}  # <-- From Terraform
-    EOF
+  run: ./scripts/generate-env.sh
   env:
-    # Database secrets from GitHub Secrets
+    # GitHub context
+    GITHUB_REPOSITORY: ${{ github.repository }}
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    GITHUB_ACTOR: ${{ github.actor }}
+    # Database secrets (from GitHub Secrets)
     POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
     MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
     MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
     REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-    # Cloudflare from Terraform outputs
+    # Cloudflare (from Terraform outputs)
     CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
 ```
 
+The script (`scripts/generate-env.sh`) generates:
+
+```bash
+# GitHub Context
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+GITHUB_TOKEN=${GITHUB_TOKEN}
+GITHUB_ACTOR=${GITHUB_ACTOR}
+
+# Database Configuration (using shell defaults)
+POSTGRES_USER=${POSTGRES_USER:-app}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}           # <-- From GitHub Secret
+POSTGRES_DB=${POSTGRES_DB:-app}
+MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-}
+MYSQL_USER=${MYSQL_USER:-app}
+MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
+MYSQL_DATABASE=${MYSQL_DATABASE:-app}
+REDIS_PASSWORD=${REDIS_PASSWORD:-}
+
+# Cloudflare Configuration (from Terraform)
+CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}  # <-- From Terraform
+```
+
 **Key Points:**
-- Single source of truth for all environment variables
+- Dedicated script (`scripts/generate-env.sh`) for reusability and testing
 - Shell defaults `${VAR:-default}` handle missing values gracefully
-- GitHub Actions expands `${{ ... }}` syntax before writing file
-- Shell expands `${VAR:-default}` when docker-compose reads .env
+- GitHub Actions passes variables via `env:` block
+- Script outputs summary without exposing secrets
 
 After this step runs, the `.env` file on the GitHub runner contains:
 ```
@@ -642,7 +649,7 @@ db_url = os.environ.get('DATABASE_URL')
 
 #### Adding Your Own Custom Secrets
 
-To add a new secret (e.g., `STRIPE_API_KEY`), you only need to edit **ONE file**: `.github/workflows/deploy.yml`
+To add a new secret (e.g., `STRIPE_API_KEY`), you need to edit **TWO files**:
 
 **1. Add the secret in GitHub**
 
@@ -653,26 +660,32 @@ Name:   STRIPE_API_KEY
 Value:  sk_live_xxxxxxxxxxxx
 ```
 
-**2. Update `.github/workflows/deploy.yml`**
+**2. Update `scripts/generate-env.sh`**
 
-Add to both the `.env` generation and the `env:` section:
+Add your variable to the .env template:
+
+```bash
+cat > "${OUTPUT_FILE}" << 'EOF'
+# ... existing variables ...
+
+# Application Secrets
+STRIPE_API_KEY=${STRIPE_API_KEY:-}               # <-- ADD THIS LINE
+EOF
+```
+
+**3. Update `.github/workflows/deploy.yml`**
+
+Add the variable to the `env:` section:
 
 ```yaml
 - name: Generate environment configuration
-  run: |
-    cat > .env << 'EOF'
-    # ... existing variables ...
-
-    # Application Secrets
-    STRIPE_API_KEY=${STRIPE_API_KEY:-}               # <-- ADD THIS LINE
-    EOF
+  run: ./scripts/generate-env.sh
   env:
-    POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    # ... existing env vars ...
     STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}    # <-- ADD THIS LINE
-    CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
 ```
 
-**3. (Optional) Use in docker-compose.yml**
+**4. (Optional) Use in docker-compose.yml**
 
 If you need to explicitly pass it to a specific service:
 
@@ -684,13 +697,13 @@ services:
       - STRIPE_API_KEY=${STRIPE_API_KEY}
 ```
 
-**4. Access in your application**
+**5. Access in your application**
 
 ```javascript
 const stripeKey = process.env.STRIPE_API_KEY
 ```
 
-That's it! No need to edit multiple files. The `.env` file is automatically generated and copied to your VPS on every deployment.
+The `.env` file is automatically generated by the script and copied to your VPS on every deployment.
 
 #### Key Files in the Pipeline
 
@@ -698,7 +711,8 @@ That's it! No need to edit multiple files. The `.env` file is automatically gene
 |------|----------|------|
 | Terraform State | GitHub Actions artifact | Infrastructure outputs (VPS_HOST, tunnel tokens, etc.) |
 | GitHub Secrets | Repository Settings | Application secrets (database passwords, API keys) |
-| `deploy.yml` | `.github/workflows/deploy.yml` | Downloads state, generates .env, copies to VPS |
+| `generate-env.sh` | `scripts/generate-env.sh` | Generates .env file from environment variables |
+| `deploy.yml` | `.github/workflows/deploy.yml` | Downloads state, calls generate-env.sh, copies to VPS |
 | `.env` | `/opt/app/.env` (auto-generated) | Complete runtime configuration on VPS |
 | `docker-compose.yml` | `deploy/docker-compose.yml` | Reads .env, passes vars to containers |
 | `update.sh` | `deploy/update.sh` | Verifies .env exists, runs deployment |

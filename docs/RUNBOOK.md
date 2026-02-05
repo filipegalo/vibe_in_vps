@@ -489,7 +489,8 @@ Configuration is automatically deployed through a centralized pipeline. Understa
 |------|------|----------|--------------|
 | 1 | Terraform State | GitHub Actions artifact | Infrastructure outputs (auto-extracted) |
 | 2 | GitHub Secrets | Repository Settings | Application secrets (database passwords, API keys) |
-| 2 | `deploy.yml` | `.github/workflows/deploy.yml` | Generates .env, copies to VPS |
+| 2 | `generate-env.sh` | `scripts/generate-env.sh` | Generates .env file from environment variables |
+| 2 | `deploy.yml` | `.github/workflows/deploy.yml` | Calls generate-env.sh, copies .env to VPS |
 | 4-5 | `docker-compose.yml` | `/opt/app/docker-compose.yml` | Reads .env, substitutes `${VAR}` |
 | 4 | `.env` | `/opt/app/.env` | Runtime config file (auto-generated) |
 | 6 | `update.sh` | `/opt/app/update.sh` | Verifies .env exists, runs deployment |
@@ -507,26 +508,38 @@ Tracing `POSTGRES_PASSWORD` and `VPS_HOST` through the pipeline:
     echo "vps_host=${VPS_HOST}" >> $GITHUB_OUTPUT
 ```
 
-**deploy.yml (generates .env with ALL variables):**
+**deploy.yml (calls script to generate .env):**
 ```yaml
 - name: Generate environment configuration
-  run: |
-    cat > .env << 'EOF'
-    # Database Configuration
-    POSTGRES_USER=${POSTGRES_USER:-app}
-    POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
-    POSTGRES_DB=${POSTGRES_DB:-app}
-
-    # Cloudflare Configuration (from Terraform)
-    CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
-    EOF
+  run: ./scripts/generate-env.sh
   env:
+    GITHUB_REPOSITORY: ${{ github.repository }}
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    GITHUB_ACTOR: ${{ github.actor }}
     POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
     CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
 
 - name: Copy environment to VPS
   run: |
     scp -i ~/.ssh/deploy_key .env deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/.env
+```
+
+**generate-env.sh (creates .env file):**
+```bash
+cat > .env << 'EOF'
+# GitHub Context
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+GITHUB_TOKEN=${GITHUB_TOKEN}
+GITHUB_ACTOR=${GITHUB_ACTOR}
+
+# Database Configuration
+POSTGRES_USER=${POSTGRES_USER:-app}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+POSTGRES_DB=${POSTGRES_DB:-app}
+
+# Cloudflare Configuration (from Terraform)
+CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+EOF
 ```
 
 **docker-compose.yml (reads from .env):**
@@ -562,9 +575,9 @@ const dbUrl = process.env.DATABASE_URL
 
 #### Two Methods to Configure Environment Variables
 
-#### Method 1: Via GitHub Secrets + deploy.yml (Recommended)
+#### Method 1: Via GitHub Secrets + Script (Recommended)
 
-This is the recommended approach for all persistent configuration. You only need to edit **one file**: `.github/workflows/deploy.yml`
+This is the recommended approach for all persistent configuration. You need to edit **two files**:
 
 1. **Add the secret in GitHub**:
    - Go to your repository on GitHub
@@ -572,25 +585,28 @@ This is the recommended approach for all persistent configuration. You only need
    - Click `New repository secret`
    - Enter the name (e.g., `STRIPE_API_KEY`) and value
 
-2. **Update deploy.yml** to include the variable in `.env` generation:
+2. **Update `scripts/generate-env.sh`** to include the variable in the template:
 
-   Edit `.github/workflows/deploy.yml` and add to the "Generate environment configuration" step:
-   ```yaml
-   - name: Generate environment configuration
-     run: |
-       cat > .env << 'EOF'
-       # ... existing variables ...
+   ```bash
+   cat > "${OUTPUT_FILE}" << 'EOF'
+   # ... existing variables ...
 
-       # Application Secrets
-       STRIPE_API_KEY=${STRIPE_API_KEY:-}  # <-- ADD THIS LINE
-       EOF
-     env:
-       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-       STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}  # <-- ADD THIS LINE
-       CLOUDFLARE_TUNNEL_TOKEN: ${{ steps.terraform_outputs.outputs.cloudflare_tunnel_token }}
+   # Application Secrets
+   STRIPE_API_KEY=${STRIPE_API_KEY:-}  # <-- ADD THIS LINE
+   EOF
    ```
 
-3. **(Optional) Reference in docker-compose.yml** if you need to explicitly pass it:
+3. **Update `.github/workflows/deploy.yml`** to pass the secret:
+
+   ```yaml
+   - name: Generate environment configuration
+     run: ./scripts/generate-env.sh
+     env:
+       # ... existing env vars ...
+       STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}  # <-- ADD THIS LINE
+   ```
+
+4. **(Optional) Reference in docker-compose.yml** if you need to explicitly pass it:
    ```yaml
    services:
      app:
@@ -598,9 +614,9 @@ This is the recommended approach for all persistent configuration. You only need
          - STRIPE_API_KEY=${STRIPE_API_KEY}
    ```
 
-4. **Push changes** - the variable will be available on next deployment.
+5. **Push changes** - the variable will be available on next deployment.
 
-**That's it!** No need to edit multiple files. The `.env` file is automatically generated and copied to your VPS.
+The `.env` file is automatically generated by the script and copied to your VPS.
 
 #### Method 2: Direct Editing via Hetzner Console (For Testing Only)
 
