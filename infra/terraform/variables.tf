@@ -18,6 +18,13 @@ variable "cloudflare_api_token" {
   default     = ""
 }
 
+variable "cloudflare_account_id" {
+  description = "Cloudflare Account ID (required if using custom domain - find in Cloudflare dashboard)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "cloudflare_zone_id" {
   description = "Cloudflare Zone ID for your domain (optional)"
   type        = string

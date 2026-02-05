@@ -8,6 +8,7 @@
 # - HETZNER_TOKEN (not in this file)
 # - HEALTHCHECKS_API_KEY (not in this file)
 # - CLOUDFLARE_API_TOKEN (not in this file)
+# - CLOUDFLARE_ACCOUNT_ID (not in this file)
 # - SSH_PUBLIC_KEY (not in this file)
 
 # ============================================

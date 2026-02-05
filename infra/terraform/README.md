@@ -22,6 +22,7 @@ These are **NEVER** in terraform.tfvars:
 | Hetzner API Token | `HETZNER_TOKEN` | `TF_VAR_hcloud_token` |
 | Healthchecks API Key | `HEALTHCHECKS_API_KEY` | `TF_VAR_healthchecks_api_key` |
 | Cloudflare API Token | `CLOUDFLARE_API_TOKEN` | `TF_VAR_cloudflare_api_token` |
+| Cloudflare Account ID | `CLOUDFLARE_ACCOUNT_ID` | `TF_VAR_cloudflare_account_id` |
 | SSH Public Key | `SSH_PUBLIC_KEY` | `TF_VAR_ssh_public_key` |
 
 **How it works:**
@@ -97,6 +98,7 @@ Go to your repo → Settings → Secrets and variables → Actions → New repos
 **Optional:**
 - `HEALTHCHECKS_API_KEY` = healthchecks.io API key (or leave empty)
 - `CLOUDFLARE_API_TOKEN` = Cloudflare API token (if using custom domain)
+- `CLOUDFLARE_ACCOUNT_ID` = Cloudflare Account ID (if using custom domain - find in dashboard)
 
 ### 5. Run Infrastructure Workflow
 

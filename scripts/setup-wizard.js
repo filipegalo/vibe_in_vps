@@ -34,6 +34,7 @@ function loadConfig() {
       enabled: false,
       domainName: '',
       apiToken: '',
+      accountId: '',
       zoneId: '',
     },
   };
@@ -687,7 +688,11 @@ ${colors.yellow}CLOUDFLARE_API_TOKEN${colors.reset} ${colors.dim}(Optional - for
   ${config.cloudflare.apiToken ? `${colors.green}✓ From wizard${colors.reset} - Copy this value:\n  ${colors.dim}${config.cloudflare.apiToken}${colors.reset}` : 'Paste your Cloudflare API token'}
   ${colors.dim}(or skip if not using custom domain)${colors.reset}
 
-${colors.dim}Note: API token is NOT saved to terraform.tfvars (security).
+${colors.yellow}CLOUDFLARE_ACCOUNT_ID${colors.reset} ${colors.dim}(Optional - for custom domain)${colors.reset}
+  ${config.cloudflare.accountId ? `${colors.green}✓ From wizard${colors.reset} - Copy this value:\n  ${colors.dim}${config.cloudflare.accountId}${colors.reset}` : 'Paste your Cloudflare Account ID'}
+  ${colors.dim}(Find in Cloudflare dashboard → Account ID)${colors.reset}
+
+${colors.dim}Note: API token and Account ID are NOT saved to terraform.tfvars (security).
 Only goes to GitHub Secrets.${colors.reset}
 
 `;
@@ -1087,6 +1092,7 @@ async function handleInput(key) {
         // Clear Cloudflare settings when disabling
         config.cloudflare.domainName = '';
         config.cloudflare.apiToken = '';
+        config.cloudflare.accountId = '';
         config.cloudflare.zoneId = '';
       }
       saveConfig(config);
@@ -1129,15 +1135,24 @@ async function handleInput(key) {
             return;
           }
 
-          rl.question('3. Cloudflare Zone ID: ', (zoneId) => {
-            rl.close();
+          rl.question('3. Cloudflare Account ID: ', (accountId) => {
+            if (!accountId.trim()) {
+              rl.close();
+              setupReadline();
+              displayStep();
+              return;
+            }
 
-            if (zoneId.trim()) {
-              config.cloudflare.domainName = domain.trim();
-              config.cloudflare.apiToken = apiToken.trim();
-              config.cloudflare.zoneId = zoneId.trim();
-              saveConfig(config);
-              updateTerraformVars(config);
+            rl.question('4. Cloudflare Zone ID: ', (zoneId) => {
+              rl.close();
+
+              if (zoneId.trim()) {
+                config.cloudflare.domainName = domain.trim();
+                config.cloudflare.apiToken = apiToken.trim();
+                config.cloudflare.accountId = accountId.trim();
+                config.cloudflare.zoneId = zoneId.trim();
+                saveConfig(config);
+                updateTerraformVars(config);
 
               console.log(`\n${colors.green}✓ Cloudflare configuration saved!${colors.reset}\n`);
               setTimeout(() => {

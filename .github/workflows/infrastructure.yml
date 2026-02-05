@@ -18,6 +18,7 @@ jobs:
       TF_VAR_hcloud_token: ${{ secrets.HETZNER_TOKEN }}
       TF_VAR_healthchecks_api_key: ${{ secrets.HEALTHCHECKS_API_KEY }}
       TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
       # Non-sensitive variable from repository context
       TF_VAR_github_repository: ${{ github.repository }}

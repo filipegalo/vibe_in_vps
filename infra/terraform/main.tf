@@ -132,11 +132,6 @@ resource "healthchecksio_check" "app" {
 # Cloudflare Tunnel (optional - custom domain + HTTPS)
 # ============================================
 
-# Fetch Cloudflare account details (only if Cloudflare is enabled)
-data "cloudflare_accounts" "main" {
-  count = local.cloudflare_enabled ? 1 : 0
-}
-
 # Generate random tunnel secret
 resource "random_password" "tunnel_secret" {
   count   = local.cloudflare_enabled ? 1 : 0
@@ -147,7 +142,7 @@ resource "random_password" "tunnel_secret" {
 # Create Cloudflare Tunnel
 resource "cloudflare_zero_trust_tunnel_cloudflared" "app" {
   count      = local.cloudflare_enabled ? 1 : 0
-  account_id = data.cloudflare_accounts.main[0].accounts[0].id
+  account_id = var.cloudflare_account_id
   name       = "${var.project_name}-tunnel"
   secret     = base64encode(random_password.tunnel_secret[0].result)
 }
@@ -155,7 +150,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "app" {
 # Configure Cloudflare Tunnel ingress rules
 resource "cloudflare_zero_trust_tunnel_cloudflared_config" "app" {
   count      = local.cloudflare_enabled ? 1 : 0
-  account_id = data.cloudflare_accounts.main[0].accounts[0].id
+  account_id = var.cloudflare_account_id
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.app[0].id
 
   config {
