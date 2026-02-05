@@ -33,14 +33,9 @@ variable "cloudflare_zone_id" {
 }
 
 variable "domain_name" {
-  description = "Custom domain name (e.g., app.example.com) - required if using Cloudflare"
+  description = "Custom domain name (e.g., app.example.com) - required if using Cloudflare. Leave empty to disable custom domain."
   type        = string
   default     = ""
-
-  validation {
-    condition     = var.cloudflare_api_token == "" || var.domain_name != ""
-    error_message = "domain_name is required when cloudflare_api_token is set. Provide your domain name in terraform.tfvars or via setup wizard."
-  }
 }
 
 variable "ssh_public_key" {
