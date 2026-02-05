@@ -67,6 +67,37 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Download infrastructure outputs
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: infrastructure.yml
+          name: terraform-state
+          path: ./terraform-state
+          if_no_artifact_found: warn
+
+      - name: Extract Terraform outputs
+        id: terraform_outputs
+        run: |
+          if [ -f ./terraform-state/terraform.tfstate ]; then
+            VPS_HOST=$(jq -r '.outputs.server_ip.value' ./terraform-state/terraform.tfstate)
+            CLOUDFLARE_TUNNEL_TOKEN=$(jq -r '.outputs.cloudflare_tunnel_token.value // ""' ./terraform-state/terraform.tfstate)
+            HEALTHCHECK_URL=$(jq -r '.outputs.healthcheck_ping_url.value // ""' ./terraform-state/terraform.tfstate)
+            CUSTOM_DOMAIN=$(jq -r '.outputs.custom_domain_url.value // ""' ./terraform-state/terraform.tfstate)
+
+            echo "vps_host=${VPS_HOST}" >> $GITHUB_OUTPUT
+            echo "cloudflare_tunnel_token=${CLOUDFLARE_TUNNEL_TOKEN}" >> $GITHUB_OUTPUT
+            echo "healthcheck_url=${HEALTHCHECK_URL}" >> $GITHUB_OUTPUT
+            echo "custom_domain_url=${CUSTOM_DOMAIN}" >> $GITHUB_OUTPUT
+            echo "✓ Extracted outputs from Terraform state"
+          else
+            echo "⚠️ No Terraform state found, using secrets (fallback)"
+            echo "vps_host=${{ secrets.VPS_HOST }}" >> $GITHUB_OUTPUT
+            echo "cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" >> $GITHUB_OUTPUT
+            echo "healthcheck_url=${{ secrets.HEALTHCHECK_PING_URL }}" >> $GITHUB_OUTPUT
+            echo "custom_domain_url=${{ secrets.CUSTOM_DOMAIN_URL }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Verify Setup Complete
         run: |
           if [ -z "${{ steps.terraform_outputs.outputs.vps_host }}" ]; then
@@ -110,37 +141,6 @@ jobs:
             ssh -i ~/.ssh/deploy_key deploy@${{ steps.terraform_outputs.outputs.vps_host }} 'mkdir -p /opt/app/scripts'
             scp -i ~/.ssh/deploy_key deploy/scripts/db-backup.sh deploy@${{ steps.terraform_outputs.outputs.vps_host }}:/opt/app/scripts/
             ssh -i ~/.ssh/deploy_key deploy@${{ steps.terraform_outputs.outputs.vps_host }} 'chmod +x /opt/app/scripts/db-backup.sh'
-          fi
-
-      - name: Download infrastructure outputs
-        uses: dawidd6/action-download-artifact@v3
-        continue-on-error: true
-        with:
-          workflow: infrastructure.yml
-          name: terraform-state
-          path: ./terraform-state
-          if_no_artifact_found: warn
-
-      - name: Extract Terraform outputs
-        id: terraform_outputs
-        run: |
-          if [ -f ./terraform-state/terraform.tfstate ]; then
-            VPS_HOST=$(jq -r '.outputs.server_ip.value' ./terraform-state/terraform.tfstate)
-            CLOUDFLARE_TUNNEL_TOKEN=$(jq -r '.outputs.cloudflare_tunnel_token.value // ""' ./terraform-state/terraform.tfstate)
-            HEALTHCHECK_URL=$(jq -r '.outputs.healthcheck_ping_url.value // ""' ./terraform-state/terraform.tfstate)
-            CUSTOM_DOMAIN=$(jq -r '.outputs.custom_domain_url.value // ""' ./terraform-state/terraform.tfstate)
-
-            echo "vps_host=${VPS_HOST}" >> $GITHUB_OUTPUT
-            echo "cloudflare_tunnel_token=${CLOUDFLARE_TUNNEL_TOKEN}" >> $GITHUB_OUTPUT
-            echo "healthcheck_url=${HEALTHCHECK_URL}" >> $GITHUB_OUTPUT
-            echo "custom_domain_url=${CUSTOM_DOMAIN}" >> $GITHUB_OUTPUT
-            echo "✓ Extracted outputs from Terraform state"
-          else
-            echo "⚠️ No Terraform state found, using secrets (fallback)"
-            echo "vps_host=${{ steps.terraform_outputs.outputs.vps_host }}" >> $GITHUB_OUTPUT
-            echo "cloudflare_tunnel_token=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}" >> $GITHUB_OUTPUT
-            echo "healthcheck_url=${{ steps.terraform_outputs.outputs.healthcheck_url }}" >> $GITHUB_OUTPUT
-            echo "custom_domain_url=${{ steps.terraform_outputs.outputs.custom_domain_url }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate environment configuration
