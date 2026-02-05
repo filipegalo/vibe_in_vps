@@ -29,13 +29,13 @@ EOF
 echo "Logging in to GHCR..."
 echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
-# Pull latest image
-echo "Pulling latest image..."
-docker compose pull app
+# Pull latest images
+echo "Pulling latest images..."
+docker compose pull
 
-# Restart app service
-echo "Restarting app..."
-docker compose up -d app
+# Restart all services (app, databases, cloudflared if enabled)
+echo "Restarting services..."
+docker compose up -d
 
 # Clean up old images
 echo "Cleaning up old images..."
