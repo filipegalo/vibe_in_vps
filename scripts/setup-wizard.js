@@ -1154,15 +1154,16 @@ async function handleInput(key) {
                 saveConfig(config);
                 updateTerraformVars(config);
 
-              console.log(`\n${colors.green}✓ Cloudflare configuration saved!${colors.reset}\n`);
-              setTimeout(() => {
+                console.log(`\n${colors.green}✓ Cloudflare configuration saved!${colors.reset}\n`);
+                setTimeout(() => {
+                  setupReadline();
+                  displayStep();
+                }, 1000);
+              } else {
                 setupReadline();
                 displayStep();
-              }, 1000);
-            } else {
-              setupReadline();
-              displayStep();
-            }
+              }
+            });
           });
         });
       });
