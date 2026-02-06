@@ -1,6 +1,12 @@
 name: Provision Infrastructure
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/terraform/**'
+      - '.github/workflows/infrastructure.yml'
   workflow_dispatch:
     inputs:
       destroy:
