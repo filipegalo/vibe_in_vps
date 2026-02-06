@@ -55,6 +55,19 @@
 
 <br />
 
+## 🎯 See It In Action
+
+> **Live Demo**: [vibe-in-vps.com](https://vibe-in-vps.com)
+> **Demo Repository**: [filipegalo/vibe_in_vps_demo](https://github.com/filipegalo/vibe_in_vps_demo)
+
+This is a real deployment using this template. Browse the demo repository to see:
+- Complete workflow history and deployment logs
+- Terraform infrastructure setup
+- GitHub Actions configuration in production
+- Actual deployment times and process
+
+<br />
+
 ## How It Works
 
 ```
