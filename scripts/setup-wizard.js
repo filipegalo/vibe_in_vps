@@ -642,7 +642,8 @@ ${colors.cyan}Collect API tokens from each service${colors.reset}
 
 ${colors.bright}Hetzner API Token${colors.reset} ${colors.yellow}(Required)${colors.reset}
 1. Go to: https://console.hetzner.cloud/
-2. Select your project (or create one)
+2. Create a project (name it anything, e.g., "vibe-deployments")
+   ${colors.dim}Note: Project name doesn't need to match anything - the API token handles project selection${colors.reset}
 3. Go to Security → API Tokens
 4. Click "Generate API Token"
 5. Name: "vibe-vps-deploy"

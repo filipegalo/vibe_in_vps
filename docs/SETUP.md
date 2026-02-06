@@ -178,6 +178,8 @@ If you don't have one:
 2. Name it: `vibe-deployments` (or anything you like)
 3. Click **"Create Project"**
 
+> **Note**: The Hetzner project name is just for organization - it doesn't need to match anything in your configuration. The API token you'll create next determines which project is used.
+
 ✅ **Checkpoint**: You're logged into Hetzner Console with a project.
 
 ### 2.3 healthchecks.io Account (Optional)
