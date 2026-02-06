@@ -30,6 +30,10 @@ function loadConfig() {
       enableDirectAccess: false,
       userIp: '',
     },
+    healthchecks: {
+      enabled: false,
+      apiKey: '',
+    },
     cloudflare: {
       enabled: false,
       domainName: '',
@@ -53,6 +57,10 @@ function loadConfig() {
         ssh: {
           ...defaultConfig.ssh,
           ...(loadedConfig.ssh || {}),
+        },
+        healthchecks: {
+          ...defaultConfig.healthchecks,
+          ...(loadedConfig.healthchecks || {}),
         },
         cloudflare: {
           ...defaultConfig.cloudflare,
