@@ -123,7 +123,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "app" {
   config {
     ingress_rule {
       hostname = var.domain_name
-      service  = "http://localhost:80"
+      service  = "http://app:3000"
     }
     # Catch-all rule (required)
     ingress_rule {
