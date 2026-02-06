@@ -32,8 +32,9 @@ echo "Pulling latest images..."
 docker compose pull
 
 # Restart all services (app, databases, cloudflared if enabled)
+# --remove-orphans removes containers for services not in docker-compose.yml
 echo "Restarting services..."
-docker compose up -d
+docker compose up -d --remove-orphans
 
 # Clean up old images
 echo "Cleaning up old images..."
