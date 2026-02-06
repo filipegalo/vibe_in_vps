@@ -91,86 +91,14 @@ jobs:
           echo "cloudflare_tunnel_token=$CLOUDFLARE_TOKEN" >> $GITHUB_OUTPUT
           echo "custom_domain_url=$CUSTOM_DOMAIN" >> $GITHUB_OUTPUT
 
-          echo "### Terraform Outputs" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**VPS IP Address:** \`$VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**SSH Command:** \`ssh deploy@$VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -n "$CUSTOM_DOMAIN" ]; then
-            echo "**App URL:** $CUSTOM_DOMAIN" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**App URL:** http://$VPS_HOST" >> $GITHUB_STEP_SUMMARY
-          fi
-
       - name: Save Terraform State
-        if: ${{ !inputs.destroy && success() }}
+        if: ${{ !inputs.destroy && !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: terraform-state
           path: infra/terraform/terraform.tfstate
           retention-days: 90
           overwrite: true
-
-      - name: Display secrets configuration instructions
-        if: ${{ !inputs.destroy }}
-        env:
-          VPS_HOST: ${{ steps.tf_output.outputs.vps_host }}
-          HEALTHCHECK_URL: ${{ steps.tf_output.outputs.healthcheck_ping_url }}
-          CLOUDFLARE_TOKEN: ${{ steps.tf_output.outputs.cloudflare_tunnel_token }}
-          CUSTOM_DOMAIN: ${{ steps.tf_output.outputs.custom_domain_url }}
-        run: |
-          echo "### ⚠️ Action Required: Configure Deployment Secrets" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Add these secrets to enable automatic deployments:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Go to: **Settings → Secrets and variables → Actions → New repository secret**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Required secret:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Name: \`VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Value: \`$VPS_HOST\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -n "$HEALTHCHECK_URL" ]; then
-            echo "**Optional secret (for monitoring):**" >> $GITHUB_STEP_SUMMARY
-            echo "- Name: \`HEALTHCHECK_PING_URL\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Value: \`$HEALTHCHECK_URL\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ -n "$CLOUDFLARE_TOKEN" ]; then
-            echo "**Optional secret (for custom domain):**" >> $GITHUB_STEP_SUMMARY
-            echo "- Name: \`CLOUDFLARE_TUNNEL_TOKEN\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Value: \`$CLOUDFLARE_TOKEN\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Custom domain configuration:**" >> $GITHUB_STEP_SUMMARY
-            echo "- Name: \`CUSTOM_DOMAIN_URL\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Value: \`$CUSTOM_DOMAIN\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **Important:** Uncomment the \`cloudflared\` service in \`deploy/docker-compose.yml\` to enable custom domain!" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🗄️ Optional Database Secrets" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "If you're using databases, add these secrets (generate passwords with \`openssl rand -base64 32\`):" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**PostgreSQL:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`POSTGRES_PASSWORD\` - Database password" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**MySQL:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`MYSQL_ROOT_PASSWORD\` - Root password" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Redis:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`REDIS_PASSWORD\` - Redis password" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Then uncomment the database services in \`deploy/docker-compose.yml\` and redeploy." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "After adding these secrets, automatic deployments will work on push to main." >> $GITHUB_STEP_SUMMARY
 
   verify:
     name: Verify VPS Setup
@@ -230,23 +158,65 @@ jobs:
         run: |
           echo "### 🎉 Infrastructure Provisioned!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Your VPS is ready. Deploy your app by pushing code to trigger the deploy workflow." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # VPS Details
           echo "**VPS IP:** \`${{ needs.terraform.outputs.vps_host }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**SSH access:** \`ssh deploy@${{ needs.terraform.outputs.vps_host }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # What's installed
           echo "**What's installed:**" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Docker & Docker Compose" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Firewall configured (SSH, HTTP, HTTPS)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Deploy user with SSH access" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Auto-configured outputs
+          echo "**Auto-configured (extracted from Terraform state):**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✓ VPS_HOST" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${{ needs.terraform.outputs.healthcheck_ping_url }}" ]; then
+            echo "- ✓ HEALTHCHECK_PING_URL (monitoring enabled)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -n "${{ needs.terraform.outputs.cloudflare_tunnel_token }}" ]; then
+            echo "- ✓ CLOUDFLARE_TUNNEL_TOKEN (custom domain enabled)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✓ CUSTOM_DOMAIN_URL: \`${{ needs.terraform.outputs.custom_domain_url }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Database secrets (optional, manual)
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Add the \`VPS_HOST\` and \`HEALTHCHECK_PING_URL\` secrets (see above)" >> $GITHUB_STEP_SUMMARY
-          echo "2. Push changes to \`main\` branch to trigger first deployment" >> $GITHUB_STEP_SUMMARY
-          echo "3. Your app will be available at: http://${{ needs.terraform.outputs.vps_host }}" >> $GITHUB_STEP_SUMMARY
+          echo "### 🗄️ Optional Database Secrets" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "If using databases, add these secrets manually:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Settings → Secrets → Actions → New repository secret**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Generate with: \`openssl rand -base64 32\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`POSTGRES_PASSWORD\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`MYSQL_ROOT_PASSWORD\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`REDIS_PASSWORD\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Then uncomment database services in \`deploy/docker-compose.yml\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Next steps
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${{ needs.terraform.outputs.custom_domain_url }}" ]; then
+            echo "1. Uncomment \`cloudflared\` service in \`deploy/docker-compose.yml\`" >> $GITHUB_STEP_SUMMARY
+            echo "2. Push to \`main\` branch to trigger deployment" >> $GITHUB_STEP_SUMMARY
+            echo "3. Your app will be available at: ${{ needs.terraform.outputs.custom_domain_url }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "1. Push to \`main\` branch to trigger deployment" >> $GITHUB_STEP_SUMMARY
+            echo "2. Your app will be available at: http://${{ needs.terraform.outputs.vps_host }}" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Cleanup SSH key
         if: always()
