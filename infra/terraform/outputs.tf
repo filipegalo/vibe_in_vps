@@ -44,7 +44,7 @@ output "custom_domain_url" {
 
 output "github_secrets_summary" {
   description = "Summary of required GitHub Secrets"
-  value = <<-EOT
+  value       = <<-EOT
 
   Add these secrets to your GitHub repository:
 
@@ -58,5 +58,5 @@ output "github_secrets_summary" {
   Then push to main branch to trigger deployment.
   ${local.cloudflare_enabled ? "\n  Don't forget to uncomment the cloudflared service in deploy/docker-compose.yml!" : ""}
   EOT
-  sensitive = true
+  sensitive   = true
 }
