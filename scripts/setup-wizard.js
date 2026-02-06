@@ -753,25 +753,24 @@ ${colors.green}✓ Checkpoint:${colors.reset} Infrastructure provisioned success
     `,
   },
   {
-    title: 'Step 10: Add Deployment Secrets',
+    title: 'Step 10: Verify Auto-Configuration',
     content: () => `
-${colors.cyan}Configure secrets for automatic deployments${colors.reset}
+${colors.cyan}Infrastructure outputs are automatically extracted!${colors.reset}
 
-${colors.bright}Add the secrets displayed in the workflow summary:${colors.reset}
+${colors.green}✓ No manual secret copying required!${colors.reset}
 
-1. Go to Settings → Secrets and variables → Actions
-2. Click "New repository secret"
+The deploy workflow automatically extracts from Terraform state:
+  ${colors.dim}✓${colors.reset} VPS_HOST (server IP address)
+  ${colors.dim}✓${colors.reset} HEALTHCHECK_PING_URL (if monitoring enabled)
+  ${config.cloudflare.enabled ? `${colors.dim}✓${colors.reset} CLOUDFLARE_TUNNEL_TOKEN (tunnel token)\n  ${colors.dim}✓${colors.reset} CUSTOM_DOMAIN_URL (https://${config.cloudflare.domainName})\n` : ''}
+${colors.bright}What you already configured (one-time setup):${colors.reset}
+  ${colors.dim}✓${colors.reset} HETZNER_TOKEN
+  ${colors.dim}✓${colors.reset} SSH_PUBLIC_KEY
+  ${colors.dim}✓${colors.reset} SSH_PRIVATE_KEY
+  ${config.healthchecks.enabled ? `${colors.dim}✓${colors.reset} HEALTHCHECKS_API_KEY\n` : ''}${config.cloudflare.enabled ? `${colors.dim}✓${colors.reset} CLOUDFLARE_API_TOKEN\n  ${colors.dim}✓${colors.reset} CLOUDFLARE_ACCOUNT_ID\n` : ''}
+${config.cloudflare.enabled ? `\n${colors.yellow}Action required:${colors.reset} Uncomment cloudflared service in deploy/docker-compose.yml\n` : ''}${colors.green}✓ Checkpoint:${colors.reset} Ready for deployment!
 
-${colors.yellow}VPS_HOST${colors.reset}
-  Paste the IP address from workflow summary
-
-${colors.yellow}HEALTHCHECK_PING_URL${colors.reset} ${colors.dim}(Optional)${colors.reset}
-  Paste the ping URL from workflow summary
-  ${colors.dim}(or skip if not using monitoring)${colors.reset}
-
-${config.cloudflare.enabled ? `\n${colors.yellow}CLOUDFLARE_TUNNEL_TOKEN${colors.reset} ${colors.dim}(Optional - for custom domain)${colors.reset}\n  Paste the Cloudflare tunnel token from workflow summary\n  ${colors.dim}(or skip if not using custom domain)${colors.reset}\n\n${colors.yellow}CUSTOM_DOMAIN_URL${colors.reset} ${colors.dim}(Optional - for custom domain)${colors.reset}\n  Paste your custom domain URL (e.g., https://app.example.com)\n  ${colors.dim}(or skip if not using custom domain)${colors.reset}\n\n${colors.dim}Don't forget to uncomment the cloudflared service in deploy/docker-compose.yml!${colors.reset}\n\n` : ''}${colors.green}✓ Checkpoint:${colors.reset} Deployment secrets configured
-
-${colors.bright}Now automatic deployments will work!${colors.reset}
+${colors.bright}Automatic deployments are now configured!${colors.reset}
     `,
   },
   {
