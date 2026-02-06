@@ -1011,8 +1011,8 @@ async function handleInput(key) {
   }
 
   // Database toggle keys (only on Step 4)
-  if (currentStep === 3) {
-    // Step 4 (index 3) is database selection
+  if (currentStep === 4) {
+    // Step 4 (index 4) is database selection
     if (key === '1') {
       config.databases.postgresql = !config.databases.postgresql;
       saveConfig(config);
