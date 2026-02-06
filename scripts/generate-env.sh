@@ -32,7 +32,7 @@ OUTPUT_FILE="${OUTPUT_FILE:-.env}"
 echo "Generating environment configuration at ${OUTPUT_FILE}..."
 
 # Generate .env file
-cat > "${OUTPUT_FILE}" << 'EOF'
+cat > "${OUTPUT_FILE}" << EOF
 # GitHub Context
 GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
 GITHUB_TOKEN=${GITHUB_TOKEN}
