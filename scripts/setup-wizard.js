@@ -836,7 +836,7 @@ ${colors.green}✓ Checkpoint:${colors.reset} App deployed and accessible!
 ${colors.green}${colors.bright}Congratulations! Your zero-ops deployment is live!${colors.reset}
 
 ${colors.cyan}What you've set up:${colors.reset}
-  ${colors.green}✓${colors.reset} VPS running on Hetzner (~$7.50/month)
+  ${colors.green}✓${colors.reset} VPS running on Hetzner (€7.37/month)
   ${colors.green}✓${colors.reset} Automatic deployments on every push
   ${colors.green}✓${colors.reset} Docker + Docker Compose environment
   ${colors.green}✓${colors.reset} GitHub Deployments tracking

@@ -25,8 +25,8 @@ cloudflare_zone_id = ""
 
 # Optional: Customize these if needed
 # server_name = "my-app-server"
-# server_type = "cpx22"       # 2 vCPU, 4GB RAM, ~$7.50/mo (default)
-                                # cpx11 (~$4.50/mo) for cheaper option
+# server_type = "cpx22"       # 2 vCPU, 4GB RAM, €7.37/mo (default)
+                                # cpx11 (~€4.50/mo) for cheaper option
 # location    = "nbg1"        # Nuremberg, Germany
 # project_name = "my-project"
 

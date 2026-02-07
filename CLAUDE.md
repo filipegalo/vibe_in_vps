@@ -96,7 +96,7 @@ To add a new secret, update these 4 locations:
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| VPS Provider | Hetzner | Affordable reliable EU/US provider (~$7.50/mo for CPX22) |
+| VPS Provider | Hetzner | Affordable reliable EU/US provider (€7.37/mo for CPX22) |
 | Container Registry | GHCR | Free for public repos, integrated with GitHub |
 | Reverse Proxy | None (for now) | Keep it simple - direct port 80 access |
 | IaC Tool | Terraform | Industry standard, Hetzner provider available |

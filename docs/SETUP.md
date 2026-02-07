@@ -157,10 +157,10 @@ If you don't have one:
 
 ### 2.2 Hetzner Cloud Account (Required)
 
-**What it's for**: VPS hosting (~$5.50/month)
+**What it's for**: VPS hosting (€7.37/month)
 
 **Steps**:
-1. Go to [console.hetzner.cloud](https://console.hetzner.cloud/)
+1. Go to [Hetzner Cloud](https://hetzner.cloud/?ref=IyoJUUeCm9RA) — use this referral to get **€20 credit** when signing up
 2. Click **"Sign up"**
 3. Fill in your details:
    - Email address
@@ -1794,11 +1794,11 @@ After successful deployment:
 ## Cost Breakdown
 
 **Monthly costs**:
-- Hetzner CPX22 VPS: ~$7.50/month
+- Hetzner CPX22 VPS: €7.37/month — [referral link](https://hetzner.cloud/?ref=IyoJUUeCm9RA) gives €20 credit for new accounts
 - GitHub Actions: Free (2,000 minutes/month for public repos)
 - healthchecks.io: Free (up to 20 checks)
 
-**Total**: ~$5.50/month
+**Total**: €7.37/month
 
 **Cheaper option**:
 - Hetzner CX11: $3.79/month (1 vCPU, 2GB RAM)

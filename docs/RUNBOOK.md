@@ -991,7 +991,7 @@ This will:
 
 ## Cost Monitoring
 
-**Monthly estimate**: ~$7.50 (Hetzner CPX22)
+**Monthly estimate**: €7.37 (Hetzner CPX22)
 
 **Set up alerts**:
 1. Hetzner Console → Billing → Alerts

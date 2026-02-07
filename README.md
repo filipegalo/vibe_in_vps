@@ -50,7 +50,7 @@
 | **No Local Tools** | Everything runs in GitHub Actions - no CLI installs needed |
 | **No Manual Config** | Cloud-init handles all VPS setup automatically |
 | **No Vendor Lock-in** | Standard Docker, Terraform, GitHub Actions |
-| **Cost Effective** | ~$7.50/month total (or ~$4.50 for small apps) |
+| **Cost Effective** | €7.37/month total (or ~€4.50 for small apps) |
 | **Production Ready** | Health checks, monitoring, deployment tracking |
 
 <br />
@@ -112,7 +112,7 @@ This is a real deployment using this template. Browse the demo repository to see
 ### Prerequisites
 
 - GitHub account
-- [Hetzner Cloud account](https://console.hetzner.cloud/) (~$7.50/month)
+- [Hetzner Cloud account](https://hetzner.cloud/?ref=IyoJUUeCm9RA) (€7.37/month) — [Use this referral](https://hetzner.cloud/?ref=IyoJUUeCm9RA) to get €20 credit when signing up
 - SSH key pair (or generate one)
 - Optional: [healthchecks.io](https://healthchecks.io) account for monitoring
 
@@ -280,13 +280,13 @@ See [SETUP.md - Deploy Your Own App](docs/SETUP.md#step-7-deploy-your-own-app) f
 
 | Service | Monthly Cost | Notes |
 |---------|-------------:|-------|
-| Hetzner CPX22 VPS | ~$7.50 | 2 vCPU, 4GB RAM, 80GB SSD |
+| Hetzner CPX22 VPS | €7.37 | 2 vCPU, 4GB RAM, 80GB SSD — [referral link](https://hetzner.cloud/?ref=IyoJUUeCm9RA) gives €20 credit |
 | GitHub Actions | Free | 2,000 min/month (public repos) |
 | GitHub Container Registry | Free | Public repos |
 | healthchecks.io | Free | Up to 20 checks |
-| **Total** | **~$7.50** | |
+| **Total** | **€7.37** | |
 
-> **Budget option**: Hetzner CPX11 (~$4.50/month) with 2 vCPU, 2GB RAM works well for low-traffic apps.
+> **Budget option**: Hetzner CPX11 (~€4.50/month) with 2 vCPU, 2GB RAM works well for low-traffic apps.
 
 <br />
 
